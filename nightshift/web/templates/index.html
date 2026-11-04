@@ -12,7 +12,7 @@
       <div class="score">{{ row.score or '–' }}<small>{% if row.fit is not none %}fit {{ (row.fit * 100) | round | int }}%{% endif %}</small></div>
       <div>
         <h3><a href="/job?id={{ row.id | urlencode }}">{{ row.title }}</a></h3>
-        <div class="meta">{{ row.company }}{% if row.location %} · {{ row.location }}{% endif %} · {{ row.source }}</div>
+        <div class="meta">{{ row.company }}{% if row.location %} · {{ row.location }}{% endif %} · {{ 'added by you' if row.source == 'manual' else row.source }}</div>
         {% for n in (row.notes_json | fromjson) if not n.startswith('guard:') %}<span class="flag">{{ n }}</span>{% endfor %}
         {% if row.error %}<div class="meta">{{ row.error }}</div>{% endif %}
       </div>
@@ -21,7 +21,7 @@
         <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="back" value="{{ status }}"><button name="do" value="skip">Skip</button></form>
         <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="back" value="{{ status }}"><button class="primary" name="do" value="approve">Approve</button></form>
         {% elif status in ('needs_human', 'approved') %}
-        <a class="btn" href="{{ row.apply_url or row.url }}" target="_blank" rel="noopener">Open form</a>
+        {% if row.apply_url or row.url %}<a class="btn" href="{{ row.apply_url or row.url }}" target="_blank" rel="noopener">Open form</a>{% endif %}
         <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="back" value="{{ status }}"><button class="primary" name="do" value="applied">Mark applied</button></form>
         {% elif status in ('skipped', 'low_score') and row.out_dir %}
         <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="back" value="{{ status }}"><button name="do" value="requeue">Back to queue</button></form>

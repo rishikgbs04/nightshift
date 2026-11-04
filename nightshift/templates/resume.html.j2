@@ -9,7 +9,11 @@
   html { -webkit-print-color-adjust: exact; }
   body {
     margin: 0; color: #111;
-    font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+    font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+    /* ATS parsers read the PDF's text layer: kerning splits words ("Y ork") and
+       ligatures turn "ffi" into one glyph ("diﬃculty"), so turn both off. */
+    font-kerning: none; font-variant-ligatures: none; font-feature-settings: "kern" 0, "liga" 0, "clig" 0;
+    text-rendering: optimizeSpeed;
     font-size: {{ font_pt }}pt; line-height: {{ line }};
   }
   header { text-align: center; margin-bottom: {{ gap }}pt; }
