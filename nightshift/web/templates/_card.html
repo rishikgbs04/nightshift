@@ -36,7 +36,12 @@
       <button class="btn" type="button" data-act="skip">Skip</button>
       <button class="btn approve" type="button" data-act="approve">{{ check() }} Approve</button>
     </div>
-    {% elif status in ('needs_human', 'approved') %}
+    {% elif status == 'approved' %}
+    <div class="actions">
+      <button class="btn" type="button" data-act="skip">Skip</button>
+      <button class="btn approve" type="button" data-act="applied">{{ check() }} I applied</button>
+    </div>
+    {% elif status == 'needs_human' %}
     <div class="actions {{ 'one' if not c.apply_url }}">
       {% if c.apply_url %}<a class="btn" href="{{ c.apply_url }}" target="_blank" rel="noopener">Open form {{ ext() }}</a>{% endif %}
       <button class="btn approve" type="button" data-act="applied">{{ check() }} I applied</button>

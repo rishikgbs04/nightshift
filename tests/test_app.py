@@ -96,7 +96,7 @@ def test_settings_validate_before_saving(home, monkeypatch):
     r = client.post("/settings/config", data={"text": "schedule: {time: '03:05'}\nnotify: {ntfy_topic: t1}\n"},
                     follow_redirects=False)
     assert "saved=config" in r.headers["location"]
-    assert "3:05 AM" in client.get("/settings").text
+    assert "03:05" in (home / "config.yaml").read_text() and "Not scheduled here" in client.get("/settings").text
 
 
 def test_answers_form_fills_blanks_without_yaml(home, monkeypatch):
@@ -184,3 +184,21 @@ def test_manifest_is_installable(home, monkeypatch):
     m = client.get("/manifest.webmanifest").json()
     assert m["display"] == "standalone" and {i["sizes"] for i in m["icons"]} >= {"192x192", "512x512"}
     assert json.loads(json.dumps(m))["start_url"] == "/"
+
+
+def test_schedule_text_matches_mode(home, monkeypatch):
+    client, _, _ = _client(home, monkeypatch, password=None)
+    page = client.get("/").text
+    assert "No nightly search on this computer yet" in page and "tonight" not in page
+    cfg = Config.load(home / "config.yaml")
+    sched = TestClient(create_app(cfg, DB(cfg.db_path), config_path=home / "config.yaml", scheduled=True))
+    assert "First search tonight at 2:17 AM" in sched.get("/").text
+
+
+def test_approved_jobs_can_be_skipped(home, monkeypatch):
+    client, db, _ = _client(home, monkeypatch, password=None)
+    db.set("greenhouse:acme:1", status="approved")
+    page = client.get("/?status=approved").text
+    assert 'data-act="skip"' in page
+    client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "skip"})
+    assert db.get("greenhouse:acme:1")["status"] == "skipped"

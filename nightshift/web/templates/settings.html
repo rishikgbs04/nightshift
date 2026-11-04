@@ -10,8 +10,9 @@
       <span id="run-text">
       {% if run.running %}Running now
       {% elif run.error %}Last run failed: {{ run.error }}
-      {% elif cfg.schedule.enabled %}Runs every night at {{ h.next_time.strftime('%-I:%M %p') }} ({{ cfg.schedule.timezone.split('/')[-1].replace('_', ' ') }} time)
-      {% else %}Nightly run is off{% endif %}
+      {% elif h.scheduled %}Runs every night at {{ h.next_time.strftime('%-I:%M %p') }} ({{ cfg.schedule.timezone.split('/')[-1].replace('_', ' ') }} time)
+      {% elif cfg.schedule.enabled %}Not scheduled here. Nightly searches run in the cloud version; use Run now to search from this computer.
+      {% else %}Nightly search is off{% endif %}
       </span></p>
     {% if not has_key %}<p class="err">Add your API key before the first run (see the setup guide).</p>{% endif %}
     {% if todo %}

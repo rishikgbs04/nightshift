@@ -124,8 +124,9 @@
       <button class="btn approve" type="button" data-act="approve" data-id="{{ row.id }}">{{ check() }} Approve</button>
     </div>
     {% elif row.status in ('approved', 'needs_human') %}
-    <div class="actions {{ 'one' if not c.apply_url }}">
-      {% if c.apply_url %}<a class="btn" href="{{ c.apply_url }}" target="_blank" rel="noopener">Open form {{ ext() }}</a>{% endif %}
+    <div class="actions three">
+      <button class="btn" type="button" data-act="skip" data-id="{{ row.id }}">Skip</button>
+      {% if c.apply_url %}<a class="btn" href="{{ c.apply_url }}" target="_blank" rel="noopener">Form {{ ext() }}</a>{% endif %}
       <button class="btn approve" type="button" data-act="applied" data-id="{{ row.id }}">{{ check() }} I applied</button>
     </div>
     {% else %}

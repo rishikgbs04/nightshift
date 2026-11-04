@@ -19,8 +19,9 @@
     </h1>
     <p class="sub">
       {% if run.running %}Working on tonight's run now
-      {% elif h.last_run %}Tailored {{ 'today' if h.last_run.date() == h.last_run.now(h.last_run.tzinfo).date() else 'on ' ~ h.last_run.strftime('%b %-d') }} at {{ h.last_run.strftime('%-I:%M %p') }}
-      {% else %}First run tonight at {{ h.next_time.strftime('%-I:%M %p') }}{% endif %}
+      {% elif h.last_run %}Last search {{ 'today' if h.last_run.date() == h.last_run.now(h.last_run.tzinfo).date() else 'on ' ~ h.last_run.strftime('%b %-d') }} at {{ h.last_run.strftime('%-I:%M %p') }}{% if h.scheduled %}, next at {{ h.next_time.strftime('%-I:%M %p') }}{% endif %}
+      {% elif h.scheduled %}First search tonight at {{ h.next_time.strftime('%-I:%M %p') }}
+      {% else %}No nightly search on this computer yet{% endif %}
     </p>
     <div class="stats">
       <div class="stat"><b data-count="approved">{{ h.counts.get('approved', 0) }}</b><span>approved</span></div>
@@ -49,14 +50,20 @@
     <div class="glyph" aria-hidden="true"></div>
     {% if status == 'queued' %}
       <h2>Nothing to review</h2>
-      <p>New matches arrive after tonight's run at {{ h.next_time.strftime('%-I:%M %p') }}. You'll get a notification.</p>
+      {% if h.scheduled %}
+      <p>New matches arrive after tonight's search at {{ h.next_time.strftime('%-I:%M %p') }}. You'll get a notification.</p>
       <a class="btn dark" href="/add">Add a job yourself</a>
+      {% else %}
+      <p>This computer doesn't search on a schedule. Search now from Settings, or set up the cloud version to have it happen every night.</p>
+      <a class="btn dark" href="/settings#run-panel">Search for jobs now</a>
+      <p style="margin-top:12px"><a href="/add">Add a job yourself</a></p>
+      {% endif %}
     {% elif status == 'needs_human' %}
       <h2>Nothing needs you</h2>
       <p>Applications that hit a CAPTCHA or a question nightshift won't guess land here.</p>
     {% elif status == 'approved' %}
       <h2>No approved jobs waiting</h2>
-      <p>Jobs you approve are sent during the next nightly run.</p>
+      <p>{% if h.scheduled %}Jobs you approve are sent during the next nightly search.{% else %}Jobs you approve wait here until you apply.{% endif %}</p>
     {% elif status == 'submitted' %}
       <h2>No applications sent yet</h2>
       <p>Approved jobs show up here once they're submitted.</p>

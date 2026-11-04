@@ -42,7 +42,8 @@ UNDOABLE_TO = {"queued", "approved", "needs_human", "skipped", "low_score"}
 
 
 def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
-               config_path: Optional[Path] = None) -> FastAPI:
+               config_path: Optional[Path] = None, scheduled: bool = False) -> FastAPI:
+    """scheduled=True when the nightly schedule runs alongside the app (`nightshift server`)."""
     app = FastAPI(title="nightshift", docs_url=None, redoc_url=None, openapi_url=None)
     db = db or DB(cfg.db_path)
     state = {"cfg": cfg}
@@ -166,6 +167,7 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
             last_run = datetime.fromisoformat(last["at"]).astimezone(tz)
         h, m = (int(x) for x in cfg.schedule.time.split(":"))
         return {"greeting": f"{greet}, {first}" if first else greet,
+                "scheduled": scheduled and cfg.schedule.enabled,
                 "last_run": last_run, "next_time": datetime(2000, 1, 1, h, m),
                 "counts": db.counts()}
 

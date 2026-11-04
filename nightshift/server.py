@@ -152,7 +152,7 @@ def serve(home: Path, host: str = "0.0.0.0", port: int = 8080) -> None:
     stop = threading.Event()
     threading.Thread(target=scheduler_loop, args=(runner, stop), daemon=True).start()
     try:
-        uvicorn.run(create_app(cfg, db, runner=runner, config_path=config_path),
+        uvicorn.run(create_app(cfg, db, runner=runner, config_path=config_path, scheduled=True),
                     host=host, port=port, log_level="warning", proxy_headers=True, forwarded_allow_ips="*")
     finally:
         stop.set()
