@@ -27,6 +27,7 @@ class RunReport:
     filtered_out: int = 0
     scored: int = 0
     queued: int = 0
+    auto_approved: int = 0
     submitted: int = 0
     needs_human: int = 0
     errors: list[str] = field(default_factory=list)
@@ -39,7 +40,9 @@ class RunReport:
             f"- postings seen: {self.discovered} ({self.new} new)",
             f"- filtered out: {self.filtered_out}",
             f"- scored by the model: {self.scored}",
-            f"- **ready for your review: {self.queued}**",
+            f"- tailored: {self.queued + self.auto_approved}"
+            + (f" ({self.auto_approved} auto-approved)" if self.auto_approved else ""),
+            f"- **waiting for your review: {self.queued}**",
         ]
         if self.submitted or self.needs_human:
             lines.append(f"- submitted: {self.submitted}, need you to finish: {self.needs_human}")
@@ -81,6 +84,18 @@ def profile_cache(cfg: Config) -> Profile:
     return _profiles[key]
 
 
+def should_auto_approve(cfg: Config, score: Optional[int], flags: list[str], res) -> bool:
+    pc = cfg.pipeline
+    if pc.auto_approve_min_score is None or score is None or score < pc.auto_approve_min_score:
+        return False
+    if pc.auto_approve_clean_only:
+        if flags:  # e.g. the posting says it won't sponsor
+            return False
+        if any(v.rule == "llm" for v in res.violations):  # model failed, offline fallback
+            return False
+    return True
+
+
 def score_and_tailor(db: DB, cfg: Config, llm: Optional[LLM], profile: Profile, report: RunReport,
                      progress: Callable[[str], None] = lambda s: None) -> None:
     pc = cfg.pipeline
@@ -98,12 +113,20 @@ def score_and_tailor(db: DB, cfg: Config, llm: Optional[LLM], profile: Profile, 
         db.set(job.id, status=status, score=s["score"], score_json=s)
         progress(f"scored {s['score']}/10  {job.company}: {job.title}")
 
-    to_tailor = db.by_status("scored", order="score DESC, fit DESC", limit=pc.max_tailor_per_run)
+    # Over-fetch so the per-company cap can skip some and still fill the night.
+    to_tailor = db.by_status("scored", order="score DESC, fit DESC", limit=pc.max_tailor_per_run * 4)
     if not to_tailor:
         return
+    per_company: dict[str, int] = {}
+    done = 0
     with PDFRenderer(cfg.submit.browser_channel, cfg.submit.browser_executable) as renderer:
         for row in to_tailor:
+            if done >= pc.max_tailor_per_run:
+                break
             job = row_to_job(row)
+            key = job.company.lower()
+            if per_company.get(key, 0) >= pc.max_per_company_per_run:
+                continue  # stays "scored"; it can be picked up another night
             out = job_dir(cfg, job)
             try:
                 res = tailor(job, profile, cfg, llm, out, renderer=renderer)
@@ -111,12 +134,20 @@ def score_and_tailor(db: DB, cfg: Config, llm: Optional[LLM], profile: Profile, 
                 db.set(job.id, status="failed", error=f"tailoring: {type(e).__name__}: {e}"[:500])
                 report.errors.append(f"tailoring {job.company} / {job.title}: {e}")
                 continue
-            notes = json.loads(row["notes_json"] or "[]")
-            notes += [f"guard: {v.where}: {v.detail} ({v.action})" for v in res.violations]
-            db.set(job.id, status="queued", out_dir=str(out), notes_json=notes)
-            report.queued += 1
+            done += 1
+            per_company[key] = per_company.get(key, 0) + 1
+            flags = json.loads(row["notes_json"] or "[]")
+            notes = flags + [f"guard: {v.where}: {v.detail} ({v.action})" for v in res.violations]
+            status = "queued"
+            if should_auto_approve(cfg, row["score"], flags, res):
+                status = "approved"
+                report.auto_approved += 1
+                db.log("auto_approve", f"score {row['score']}", job.id)
+            else:
+                report.queued += 1
+            db.set(job.id, status=status, out_dir=str(out), notes_json=notes)
             report.top.append((row["score"], job.company, job.title))
-            progress(f"tailored {job.company}: {job.title}")
+            progress(f"tailored {job.company}: {job.title}" + (" (auto-approved)" if status == "approved" else ""))
     report.top.sort(reverse=True)
 
 
@@ -127,21 +158,23 @@ def run(cfg: Config, llm: Optional[LLM], db: Optional[DB] = None,
     report = RunReport()
     profile = profile_cache(cfg)
 
-    if cfg.submit.enabled:
-        from .submit import submit_approved
-        sub = submit_approved(db, cfg, profile, progress=progress)
-        report.submitted, report.needs_human = sub.submitted, sub.needs_human
-        report.errors += sub.errors
-
     if jobs is None:
-        jobs, errs = sources.discover(cfg.companies)
+        jobs, errs = sources.discover(cfg.companies.resolved(cfg.home))
         report.errors += errs
     ingest(db, jobs, cfg, report)
     score_and_tailor(db, cfg, llm, profile, report, progress)
+
+    # Submit after tailoring, so tonight's auto-approved jobs go out tonight
+    # along with anything you approved during the day.
+    if cfg.submit.enabled:
+        from .submit import submit_approved
+        sub = submit_approved(db, cfg, profile, llm=llm, progress=progress)
+        report.submitted, report.needs_human = sub.submitted, sub.needs_human
+        report.errors += sub.errors
 
     digest = report.markdown()
     (cfg.home / "data").mkdir(parents=True, exist_ok=True)
     (cfg.home / "data" / "last_run.md").write_text(digest)
     db.log("run", json.dumps({k: getattr(report, k) for k in ("discovered", "new", "filtered_out",
-                                                               "scored", "queued", "submitted")}))
+                                                               "scored", "queued", "auto_approved", "submitted")}))
     return report

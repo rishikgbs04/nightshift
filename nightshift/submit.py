@@ -11,17 +11,23 @@ Safety model:
 
 from __future__ import annotations
 
+import json
+import random
 import re
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
 import yaml
 
+from . import guard
 from .config import Config
 from .db import DB, row_to_job
-from .models import Profile
-from .tailor import output_files
+from .llm import LLM, LLMError
+from .models import Job, Profile
+from .tailor import _profile_for_prompt, output_files
 
 FILL_ME = "__FILL_ME__"
 
@@ -72,6 +78,7 @@ COLLECT_FIELDS_JS = r"""
 class FillResult:
     filled: list[str] = field(default_factory=list)
     missing_required: list[str] = field(default_factory=list)
+    drafted: list[dict] = field(default_factory=list)  # open-ended answers written for this form
     captcha: bool = False
 
 
@@ -120,11 +127,64 @@ def answer_for(label: str, answers: list[tuple[re.Pattern, str]]) -> Optional[st
     return None
 
 
+# --------------------------------------------------------------------------- open-ended questions
+
+# Questions whose answer is a fact about you. These are NEVER drafted by a model:
+# they come from answers.yaml / your profile, or the job goes to "Needs you".
+FACTUAL = re.compile(
+    r"authori[sz]|sponsor|visa|citizen|clearance|salary|compensation|\bpay\b|\brate\b|start date|when can you"
+    r"|notice period|relocat|years of|how many years|\bgpa\b|graduat|degree|gender|race|ethnic|hispanic"
+    r"|veteran|disabil|pronoun|\bage\b|birth|address|phone|e-?mail|linkedin|github|website|portfolio|url"
+    r"|refer|how did you (hear|learn|find)|\bname\b|location|city|country|\bstate\b|zip|postal|signature"
+    r"|criminal|convict|background check|drug|consent|agree|acknowledge|certif|privacy|terms", re.I)
+OPEN_ENDED = re.compile(
+    r"\bwhy\b|tell us|describe|share|explain|what (excites|interests|draws|attracts|motivates)|motivat"
+    r"|anything else|additional (information|comments)|about yourself|interest(ed)? in (this|the|our)"
+    r"|what would you|how would you|proud|challenge|cover letter", re.I)
+
+ANSWER_SYSTEM = """You fill in one open-ended question on a job application for the candidate.
+
+Write the answer in the candidate's voice, first person, plain text, 60-140 words.
+Ground it in specifics from the job description and the candidate's profile.
+
+Rules: every claim about the candidate must come from the profile. Never invent
+numbers, technologies, employers, outcomes, dates or personal circumstances.
+If the question asks for something the profile cannot answer (personal stories,
+preferences, logistics), reply with exactly: SKIP"""
+
+
+def is_open_ended(label: str, field_type: str) -> bool:
+    if not label or FACTUAL.search(label):
+        return False
+    return field_type == "textarea" or bool(OPEN_ENDED.search(label))
+
+
+def make_drafter(llm: Optional[LLM], profile: Profile, job: Job,
+                 cover_letter: str = "") -> Callable[[str], Optional[str]]:
+    """Returns label -> answer (or None to leave it for you)."""
+    def draft(label: str) -> Optional[str]:
+        if re.search(r"cover letter", label, re.I):
+            return cover_letter or None
+        if llm is None:
+            return None
+        user = (f"QUESTION: {label}\n\nJOB: {job.title} at {job.company}\n\n"
+                f"JOB DESCRIPTION:\n{job.description[:6000]}\n\nCANDIDATE PROFILE:\n{_profile_for_prompt(profile)}")
+        try:
+            text = llm.text(ANSWER_SYSTEM, user).strip()
+        except LLMError:
+            return None
+        if not text or text.upper().startswith("SKIP"):
+            return None
+        cleaned, _ = guard.enforce_letter(text, profile)
+        return cleaned if len(cleaned.split()) >= 15 else None
+    return draft
+
+
 # --------------------------------------------------------------------------- filling
 
 
 def fill_form(page, answers: list[tuple[re.Pattern, str]], resume: Optional[Path],
-              letter: Optional[Path]) -> FillResult:
+              letter: Optional[Path], drafter: Optional[Callable[[str], Optional[str]]] = None) -> FillResult:
     info = page.evaluate(COLLECT_FIELDS_JS)
     res = FillResult(captcha=info["captcha"])
     groups_done: set[str] = set()
@@ -153,6 +213,10 @@ def fill_form(page, answers: list[tuple[re.Pattern, str]], resume: Optional[Path
                     res.filled.append(f"{label} <- {f.get('option')}")
                 continue
             ans = answer_for(label, answers)
+            if ans is None and drafter and t in ("text", "textarea") and is_open_ended(label, t):
+                ans = drafter(label)
+                if ans:
+                    res.drafted.append({"question": label, "answer": ans})
             if ans is None:
                 if f["required"]:
                     res.missing_required.append(label)
@@ -200,16 +264,29 @@ def click_submit(page) -> bool:
     return bool(CONFIRM.search(page.inner_text("body")))
 
 
-def submit_approved(db: DB, cfg: Config, profile: Profile,
-                    progress: Callable[[str], None] = lambda s: None) -> SubmitSummary:
+def submitted_today(db: DB) -> int:
+    """Forms filled since local midnight (dry runs count too: they still load the site)."""
+    midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+    since = midnight.astimezone(timezone.utc).isoformat(timespec="seconds")
+    return db.conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'submit' AND at >= ?", (since,)).fetchone()[0]
+
+
+def submit_approved(db: DB, cfg: Config, profile: Profile, llm: Optional[LLM] = None,
+                    progress: Callable[[str], None] = lambda s: None,
+                    sleep: Callable[[float], None] = time.sleep) -> SubmitSummary:
     from playwright.sync_api import sync_playwright
 
     summary = SubmitSummary()
-    rows = db.by_status("approved", order="updated_at ASC", limit=50)
+    budget = cfg.submit.max_per_day - submitted_today(db)
+    if budget <= 0:
+        progress(f"daily cap of {cfg.submit.max_per_day} reached; the rest wait for tomorrow")
+        return summary
+    rows = db.by_status("approved", order="score DESC, updated_at ASC", limit=budget)
     if not rows:
         return summary
     # answers.yaml wins over profile defaults
     answers = load_answers(cfg.resolve(cfg.answers_path)) + profile_answers(profile)
+    lo, hi = cfg.submit.delay_seconds
 
     with sync_playwright() as pw:
         kwargs = {"headless": cfg.submit.headless}
@@ -221,17 +298,24 @@ def submit_approved(db: DB, cfg: Config, profile: Profile,
             browser = pw.chromium.launch(**kwargs)
         except Exception:  # noqa: BLE001 - fall back to Playwright's bundled Chromium
             browser = pw.chromium.launch(headless=cfg.submit.headless)
-        for row in rows:
+        for i, row in enumerate(rows):
+            if i and hi > 0:
+                sleep(random.uniform(lo, hi))  # spread applications out
             job = row_to_job(row)
             out = Path(row["out_dir"]) if row["out_dir"] else None
             files = output_files(out) if out else {"resume": None, "letter": None}
+            letter_text = (out / "cover_letter.txt").read_text() if out and (out / "cover_letter.txt").exists() else ""
+            drafter = make_drafter(llm, profile, job, letter_text) if cfg.submit.answer_open_questions else None
             page = browser.new_page()
             try:
                 page.goto(job.apply_url or job.url, wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_timeout(1500)
-                res = fill_form(page, answers, files["resume"], files["letter"])
-                shot = (out or cfg.out_dir) / "form.png"
-                page.screenshot(path=str(shot), full_page=True)
+                res = fill_form(page, answers, files["resume"], files["letter"], drafter)
+                base = out or cfg.out_dir
+                base.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(base / "form.png"), full_page=True)
+                if res.drafted:
+                    (base / "answers.json").write_text(json.dumps(res.drafted, indent=2))
                 notes = [f"filled: {x}" for x in res.filled]
                 if res.captcha:
                     db.set(job.id, status="needs_human", error="CAPTCHA on the form; finish this one yourself")
@@ -248,11 +332,11 @@ def submit_approved(db: DB, cfg: Config, profile: Profile,
                            error="Dry run: form filled (see form.png) but not submitted. Set submit.live: true to auto-submit.")
                     summary.needs_human += 1
                 elif click_submit(page):
-                    page.screenshot(path=str((out or cfg.out_dir) / "confirmation.png"), full_page=True)
+                    page.screenshot(path=str(base / "confirmation.png"), full_page=True)
                     db.set(job.id, status="submitted", error=None)
                     summary.submitted += 1
                 else:
-                    page.screenshot(path=str((out or cfg.out_dir) / "after_submit.png"), full_page=True)
+                    page.screenshot(path=str(base / "after_submit.png"), full_page=True)
                     db.set(job.id, status="needs_human",
                            error="Clicked submit but saw no confirmation (see after_submit.png)")
                     summary.needs_human += 1
@@ -260,6 +344,7 @@ def submit_approved(db: DB, cfg: Config, profile: Profile,
                 progress(f"{job.company}: {db.get(job.id)['status']}")
             except Exception as e:  # noqa: BLE001
                 db.set(job.id, status="needs_human", error=f"{type(e).__name__}: {str(e)[:300]}")
+                db.log("submit", f"error: {e}"[:500], job.id)
                 summary.errors.append(f"submit {job.company} / {job.title}: {e}")
             finally:
                 page.close()

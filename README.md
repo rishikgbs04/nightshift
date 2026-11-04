@@ -93,6 +93,31 @@ nightshift serve --config /tmp/nightshift-demo/config.yaml
 
 `provider: anthropic` uses the Messages API. `provider: openai` speaks the OpenAI chat-completions format to any `base_url`, so local models and LLM gateways work too.
 
+### Autopilot: 50 applications a day
+
+Once you trust the output, nightshift can run end to end:
+
+```yaml
+companies:
+  include_defaults: true          # ~300 bundled tech companies (run `nightshift boards --prune` once)
+pipeline:
+  max_llm_scoring_per_run: 200
+  max_tailor_per_run: 60
+  auto_approve_min_score: 8       # 8+/10 skip your review; the rest still wait for you
+  max_per_company_per_run: 3      # never flood one company
+submit:
+  enabled: true
+  live: true                      # start with false for a week and check form.png
+  max_per_day: 50
+  delay_seconds: [45, 180]        # spread applications out
+  answer_open_questions: true
+```
+
+- **Auto-approve** only applies to clean jobs: anything flagged (e.g. "won't sponsor") or tailored without the model still waits for you.
+- **Open-ended questions** ("Why do you want to work here?") are drafted from your profile and the posting, then run through the same guard. Sentences about you that aren't backed by your profile are removed. If nothing honest is left, the job goes to *Needs you*. Each draft is saved next to the application and shown in the dashboard.
+- **Factual questions** (work authorization, sponsorship, salary, start date, demographics) are **never** drafted by the model. They come from `answers.yaml` only.
+- The **daily cap** counts every form opened since midnight, across runs.
+
 ### Submitting
 
 Off by default. With `submit.enabled: true`, each run opens the application form for jobs you **approved**, uploads the tailored resume and cover letter, and fills fields from your profile and `answers.yaml`.
@@ -117,7 +142,7 @@ nightshift/
   submit.py    label-based form filling with Playwright
   web/         FastAPI review dashboard
   cli.py       `nightshift …`
-tests/         guard, parsers, filters, end-to-end tailoring, pipeline, dashboard, form filling
+tests/         guard, parsers, filters, tailoring, pipeline, autopilot, dashboard, form filling
 ```
 
 ```bash

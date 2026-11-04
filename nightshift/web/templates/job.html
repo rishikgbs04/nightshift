@@ -75,6 +75,17 @@
     </section>
     {% endif %}
 
+    {% if drafted or form_shot %}
+    <section class="card">
+      <h2>Application form</h2>
+      {% for d in drafted %}
+      <div class="change"><b>{{ d.question }}</b><div style="margin-top:4px;white-space:pre-wrap">{{ d.answer }}</div></div>
+      {% endfor %}
+      {% if drafted %}<p class="hint">Drafted from your profile and the posting; claims about you that aren't in your profile were removed.</p>{% endif %}
+      {% if form_shot %}<p><a href="/file?id={{ row.id | urlencode }}&name=form.png" target="_blank" rel="noopener">See the filled form</a></p>{% endif %}
+    </section>
+    {% endif %}
+
     <section class="card">
       <details><summary>Job description</summary><div class="jd">{{ row.description }}</div></details>
     </section>

@@ -35,9 +35,37 @@ class SearchConfig(BaseModel):
 
 
 class Companies(BaseModel):
+    # Also watch the bundled list in nightshift/data/companies.yaml (a few hundred
+    # tech companies). Run `nightshift boards --prune` once to drop dead slugs.
+    include_defaults: bool = False
+    exclude: list[str] = Field(default_factory=list)  # slugs to never use
     greenhouse: list[str] = Field(default_factory=list)
     lever: list[str] = Field(default_factory=list)
     ashby: list[str] = Field(default_factory=list)
+
+    def resolved(self, home: Optional[Path] = None) -> "Companies":
+        """Your list plus the bundled one (if enabled), minus exclusions and
+        boards that `nightshift boards --prune` found dead."""
+        out = {k: list(getattr(self, k)) for k in ("greenhouse", "lever", "ashby")}
+        if self.include_defaults:
+            bundled = yaml.safe_load((Path(__file__).parent / "data" / "companies.yaml").read_text()) or {}
+            for k in out:
+                out[k] += [str(s) for s in bundled.get(k, [])]
+        dead = set(dead_boards(home)) if home else set()
+        for k in out:
+            seen: set[str] = set()
+            out[k] = [s for s in out[k] if not (s in seen or seen.add(s))
+                      and s not in self.exclude and f"{k}:{s}" not in dead]
+        return Companies(**out)
+
+
+def dead_boards_path(home: Path) -> Path:
+    return home / "data" / "dead_boards.txt"
+
+
+def dead_boards(home: Path) -> list[str]:
+    p = dead_boards_path(home)
+    return [ln.strip() for ln in p.read_text().splitlines() if ln.strip()] if p.exists() else []
 
 
 class TailorConfig(BaseModel):
@@ -59,11 +87,27 @@ class PipelineConfig(BaseModel):
     max_llm_scoring_per_run: int = 60
     max_tailor_per_run: int = 25
     min_score: int = 6
+    # Jobs scoring at least this go straight to "approved" (and get submitted the
+    # same night if submit.enabled). None = you approve everything by hand.
+    auto_approve_min_score: Optional[int] = None
+    # Never auto-approve a job carrying a flag (e.g. "won't sponsor") or whose
+    # tailoring fell back to offline because the model failed.
+    auto_approve_clean_only: bool = True
+    # Don't flood one company: at most this many new applications per company per night.
+    max_per_company_per_run: int = 3
 
 
 class SubmitConfig(BaseModel):
     enabled: bool = False  # submit approved applications on each run
     live: bool = False  # False = fill forms and screenshot, never click submit
+    max_per_day: int = 50  # hard cap on forms filled per calendar day
+    # Random pause between applications, in seconds, so submissions are spread
+    # out instead of arriving in one burst.
+    delay_seconds: tuple[int, int] = (45, 180)
+    # Let the LLM draft answers to open-ended questions ("Why do you want to work
+    # here?") from your profile and the posting, checked by the guard. Factual
+    # questions (visa, salary, dates) are only ever answered from answers.yaml.
+    answer_open_questions: bool = True
     browser_channel: Optional[str] = "chrome"  # use installed Chrome; None = Playwright Chromium
     browser_executable: Optional[str] = None
     headless: bool = True

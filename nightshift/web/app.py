@@ -60,8 +60,12 @@ def create_app(cfg: Config, db: Optional[DB] = None) -> FastAPI:
         profile = profile_cache(cfg)
         files = output_files(Path(row["out_dir"])) if row["out_dir"] else {}
         entries = {e.id: e for e in profile.entries()}
+        out = Path(row["out_dir"]) if row["out_dir"] else None
+        drafted = json.loads((out / "answers.json").read_text()) if out and (out / "answers.json").exists() else []
+        form_shot = out is not None and (out / "form.png").exists()
         return templates.TemplateResponse(request, "job.html", {
             "row": row, "r": result, "files": files, "entries": entries,
+            "drafted": drafted, "form_shot": form_shot,
             "score": json.loads(row["score_json"]) if row["score_json"] else None,
             "notes": json.loads(row["notes_json"]) if row["notes_json"] else [],
         })

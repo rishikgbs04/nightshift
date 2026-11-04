@@ -27,6 +27,10 @@ search:
 #   boards.greenhouse.io/<slug>   jobs.lever.co/<slug>   jobs.ashbyhq.com/<slug>
 # Run `nightshift boards` to check them; fix or delete any that 404.
 companies:
+  # Also watch the ~300 tech companies bundled with nightshift. After turning
+  # this on, run `nightshift boards --prune` once to skip the dead slugs.
+  include_defaults: true
+  exclude: []          # slugs you never want, e.g. [somecompany]
   greenhouse: [anthropic, stripe, databricks, figma, discord, airbnb, robinhood, cloudflare, dropbox,
                pinterest, reddit, lyft, gitlab, mongodb, datadog, duolingo, asana, twitch]
   lever: [palantir, spotify, plaid]
@@ -39,12 +43,20 @@ tailor:
   cover_letter: true
 
 pipeline:
-  max_llm_scoring_per_run: 60   # best keyword matches get scored by the model
-  max_tailor_per_run: 25        # how many tailored applications to queue per night
+  max_llm_scoring_per_run: 200  # best keyword matches get scored by the model
+  max_tailor_per_run: 60        # how many tailored applications per night
   min_score: 6                  # 1-10; below this, a job goes to "Low score"
+  max_per_company_per_run: 3    # don't flood one company
+  # Jobs scoring at least this skip your review and go straight to "approved".
+  # Leave empty (null) to approve everything yourself. Start at 8 or higher.
+  auto_approve_min_score: null
+  auto_approve_clean_only: true # never auto-approve flagged jobs (e.g. "won't sponsor")
 
 submit:
-  enabled: false     # true = on each run, fill forms for jobs you approved
+  enabled: false     # true = on each run, fill forms for approved jobs
   live: false        # true = also click submit (false = fill + screenshot only)
+  max_per_day: 50    # hard cap on applications per day
+  delay_seconds: [45, 180]      # random pause between applications
+  answer_open_questions: true   # draft "Why do you want to work here?" etc. from your profile
   browser_channel: chrome
   headless: true

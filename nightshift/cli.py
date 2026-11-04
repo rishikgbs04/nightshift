@@ -141,6 +141,7 @@ def serve(config: Path = ConfigOpt, port: int = 8765, host: str = "127.0.0.1"):
 @app.command()
 def submit(config: Path = ConfigOpt, live: Optional[bool] = typer.Option(None, help="Override submit.live")):
     """Fill (and with --live, submit) application forms for approved jobs."""
+    from .llm import make_llm
     from .models import Profile
     from .submit import submit_approved
 
@@ -148,19 +149,39 @@ def submit(config: Path = ConfigOpt, live: Optional[bool] = typer.Option(None, h
     if live is not None:
         cfg.submit.live = live
     s = submit_approved(DB(cfg.db_path), cfg, Profile.load(cfg.resolve(cfg.profile_path)),
-                        progress=lambda m: typer.echo(f"  {m}"))
+                        llm=make_llm(cfg.llm), progress=lambda m: typer.echo(f"  {m}"))
     typer.echo(f"submitted {s.submitted}, need you: {s.needs_human}")
     for e in s.errors:
         typer.echo(f"  ! {e}")
 
 
 @app.command()
-def boards(config: Path = ConfigOpt):
-    """Check that every company slug in config.yaml resolves."""
+def boards(config: Path = ConfigOpt,
+           prune: bool = typer.Option(False, help="Remember dead boards and skip them from now on")):
+    """Check every company job board you're watching (yours + the bundled list if enabled)."""
+    from .config import dead_boards_path
     from .sources import check_boards
 
-    for source, slug, status in check_boards(_cfg(config).companies):
-        typer.echo(f"  {source:<10} {slug:<24} {status}")
+    cfg = _cfg(config)
+    companies = cfg.companies.resolved(cfg.home)
+    ok = dead = 0
+    newly_dead: list[str] = []
+    for source, slug, status in check_boards(companies):
+        typer.echo(f"  {source:<10} {slug:<28} {status}")
+        if status.startswith("ok"):
+            ok += 1
+        elif "HTTP 404" in status or "HTTP 410" in status:  # only definite misses; not timeouts
+            dead += 1
+            newly_dead.append(f"{source}:{slug}")
+    typer.echo(f"\n{ok} boards working, {dead} not found.")
+    if prune and newly_dead:
+        path = dead_boards_path(cfg.home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as f:
+            f.write("\n".join(newly_dead) + "\n")
+        typer.echo(f"Skipping {len(newly_dead)} dead boards from now on (listed in {path}).")
+    elif newly_dead:
+        typer.echo("Run again with --prune to skip the dead ones from now on.")
 
 
 @app.command()
