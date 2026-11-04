@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_pagehead.html" import pagehead %}
+{% block title %}Replies{% endblock %}
+{% block body %}
+{{ pagehead("Replies", "Emails about your applications and outreach. Everything else in your inbox is ignored.") }}
+<main class="wrap sections">
+  {% if not email_ready %}
+  <section class="panel">
+    <h2>Connect your email</h2>
+    <p>nightshift reads replies to tell you about interviews and stop follow-ups when someone answers. Add your address and an app password in Settings.</p>
+    <p style="margin-top:12px"><a class="btn small" href="/settings#email-panel">Set up email</a></p>
+  </section>
+  {% else %}
+  <div class="row-between">
+    <p class="note" style="margin:0">{% if last_check %}Checked {{ last_check | ago }}{% else %}Not checked yet{% endif %}</p>
+    <button class="btn small" type="button" id="inbox-check">Check now</button>
+  </div>
+  {% endif %}
+
+  {% for m in rows %}
+  {% set company = m.job_company or m.contact_company or m.from_name or m.from_addr %}
+  <article class="panel msg kind-{{ m.kind }}">
+    <div class="msg-top">
+      <div class="avatar" style="--h: {{ avatar_hue(company) }}" aria-hidden="true">{{ initials(company) }}</div>
+      <div class="msg-who">
+        <p class="role" style="font-size:16px">{{ company }}</p>
+        <p class="org">{{ m.from_name or m.from_addr }}{% if m.job_title %}<br>{{ m.job_title }}{% endif %}</p>
+      </div>
+      <span class="chip kind {{ m.kind }}">{{ KIND_LABEL.get(m.kind, m.kind) }}</span>
+    </div>
+    <p class="why" style="margin-top:10px">{{ m.summary or m.subject }}</p>
+    <details style="margin-top:8px"><summary style="font-size:14px;color:var(--muted)">{{ m.subject }}<span class="when">{{ m.at | ago }}</span></summary>
+      <div class="jd">{{ m.snippet }}</div>
+    </details>
+    {% if m.job_id %}<p class="note"><a href="/job?id={{ m.job_id | urlencode }}">Open the application</a></p>{% endif %}
+  </article>
+  {% else %}
+  {% if email_ready %}
+  <section class="empty">
+    <div class="glyph" aria-hidden="true"></div>
+    <h2>No replies yet</h2>
+    <p>Recruiter emails about jobs you applied to show up here, and interview requests go straight to your phone.</p>
+  </section>
+  {% endif %}
+  {% endfor %}
+</main>
+{% endblock %}

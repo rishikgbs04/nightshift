@@ -79,11 +79,15 @@ class Runner:
             report = self._run_fn(cfg, db, progress)
             st.summary = getattr(report, "markdown", lambda: str(report))()
             counts = db.counts()
+            good = getattr(report, "good_news", []) or []
             title, msg = notify.morning_message(
                 waiting=counts.get("queued", 0),
                 auto_approved=getattr(report, "auto_approved", 0),
                 submitted=getattr(report, "submitted", 0),
                 needs_you=counts.get("needs_human", 0))
+            if good:
+                msg = "\n".join(good[:3]) + "\n" + msg
+                title = good[0].split(":")[0] if len(good) == 1 else f"{len(good)} replies need you"
             notify.send(cfg.notify, title, msg)
         except Exception as e:  # noqa: BLE001 - surface it in the app, keep the server alive
             st.error = f"{type(e).__name__}: {e}"
@@ -104,7 +108,7 @@ def _default_run(cfg: Config, db: DB, progress: Callable[[str], None]):
     from .llm import make_llm
     from .pipeline import run
 
-    return run(cfg, make_llm(cfg.llm), db=db, progress=progress)
+    return run(cfg, make_llm(cfg), db=db, progress=progress)
 
 
 def scheduler_loop(runner: Runner, stop: threading.Event, clock: Callable[[], datetime] = None) -> None:
@@ -135,6 +139,31 @@ def scheduler_loop(runner: Runner, stop: threading.Event, clock: Callable[[], da
                 time.sleep(1)
 
 
+def inbox_loop(runner: Runner, stop: threading.Event) -> None:
+    """Check for recruiter replies every few hours, so interview requests reach
+    your phone the same day instead of the next night."""
+    from . import replies
+    from .llm import make_llm
+    from .mail import ImapMailbox, MailError
+
+    stop.wait(120)
+    while not stop.is_set():
+        wait = 7200
+        try:
+            cfg = runner.config()
+            wait = max(15, cfg.email.check_every_minutes) * 60
+            if cfg.email.ready() and cfg.email.check_replies and not runner.state.running:
+                db = runner.db or DB(cfg.db_path)
+                try:
+                    llm = make_llm(cfg)
+                except Exception:  # noqa: BLE001 - no key: classify without the model
+                    llm = None
+                replies.check(db, cfg, ImapMailbox(cfg.email), llm=llm)
+        except (MailError, Exception):  # noqa: BLE001 - never kill the server over the inbox
+            pass
+        stop.wait(wait)
+
+
 def serve(home: Path, host: str = "0.0.0.0", port: int = 8080) -> None:
     import uvicorn
 
@@ -151,6 +180,7 @@ def serve(home: Path, host: str = "0.0.0.0", port: int = 8080) -> None:
     runner = Runner(config_path, db)
     stop = threading.Event()
     threading.Thread(target=scheduler_loop, args=(runner, stop), daemon=True).start()
+    threading.Thread(target=inbox_loop, args=(runner, stop), daemon=True).start()
     try:
         uvicorn.run(create_app(cfg, db, runner=runner, config_path=config_path, scheduled=True),
                     host=host, port=port, log_level="warning", proxy_headers=True, forwarded_allow_ips="*")

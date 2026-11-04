@@ -175,5 +175,42 @@
     e.target.disabled = false;
   });
 
+  // inbox: check now
+  document.querySelectorAll("#inbox-check").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; const label = b.textContent; b.textContent = "Checking…";
+    try {
+      const r = await fetch("/api/inbox-check", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.error || "Couldn't check your email."); }
+      else { showToast(d.matched ? `${d.matched} new ${d.matched === 1 ? "reply" : "replies"}` : "No new replies"); if (d.matched) setTimeout(() => location.reload(), 900); }
+    } catch (e) { showToast("Couldn't reach the server."); }
+    b.disabled = false; b.textContent = label;
+  }));
+
+  // people: send / don't send / undo / save edits
+  document.querySelectorAll(".contact [data-cact]").forEach((b) => b.addEventListener("click", async () => {
+    const card = b.closest(".contact");
+    const id = card.dataset.cid;
+    b.disabled = true;
+    try {
+      if (b.dataset.cact === "save") {
+        const r = await fetch("/api/contact-edit", { method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id, subject: card.querySelector(".c-subject").value, body: card.querySelector(".c-body").value }) });
+        const d = await r.json();
+        card.querySelector(".c-body").value = d.body;
+        showToast("Saved");
+      } else {
+        const r = await fetch("/api/contact", { method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id, do: b.dataset.cact }) });
+        if (r.status === 401) { location.href = "/login"; return; }
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        showToast(d.label);
+        setTimeout(() => location.reload(), 700);
+      }
+    } catch (e) { showToast("Couldn't save that. Try again."); }
+    b.disabled = false;
+  }));
+
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 })();

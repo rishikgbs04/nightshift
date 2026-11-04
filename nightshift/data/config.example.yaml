@@ -5,8 +5,11 @@ answers_path: answers.yaml
 llm:
   # anthropic | openai (any OpenAI-compatible API, e.g. a local gateway) | offline
   provider: anthropic
-  model: claude-sonnet-5-5
+  model: claude-haiku-5-5            # about $0.006 per tailored job
   api_key_env: ANTHROPIC_API_KEY     # name of the env var that holds the key
+  monthly_budget_usd: 9              # hard cap; AI pauses until the 1st when reached
+  price_input_per_mtok: 0.10         # Haiku 5.5 prices, used to count spend
+  price_output_per_mtok: 0.50
   # base_url: http://localhost:8000/v1   # for provider: openai pointed at a gateway/local model
 
 search:
@@ -43,8 +46,8 @@ tailor:
   cover_letter: true
 
 pipeline:
-  max_llm_scoring_per_run: 200  # best keyword matches get scored by the model
-  max_tailor_per_run: 60        # how many tailored applications per night
+  max_llm_scoring_per_run: 80   # best keyword matches get scored by the model
+  max_tailor_per_run: 25        # how many tailored applications per night
   min_score: 6                  # 1-10; below this, a job goes to "Low score"
   max_per_company_per_run: 3    # don't flood one company
   # Jobs scoring at least this skip your review and go straight to "approved".
@@ -55,8 +58,31 @@ pipeline:
 submit:
   enabled: false     # true = on each run, fill forms for approved jobs
   live: false        # true = also click submit (false = fill + screenshot only)
-  max_per_day: 50    # hard cap on applications per day
+  max_per_day: 25    # hard cap on applications per day
   delay_seconds: [45, 180]      # random pause between applications
   answer_open_questions: true   # draft "Why do you want to work here?" etc. from your profile
   browser_channel: chrome
   headless: true
+
+# Your mailbox: reads recruiter replies and sends outreach. For Gmail or NYU
+# (Google) email: turn on 2-Step Verification, create an app password at
+# myaccount.google.com/apppasswords, and set it as the NIGHTSHIFT_EMAIL_PASSWORD
+# secret on your server. Never put the password in this file.
+email:
+  address: ""                  # e.g. bg2960@nyu.edu
+  from_name: ""                # e.g. Rishik Gannavarapu
+  imap_host: imap.gmail.com
+  smtp_host: smtp.gmail.com
+  check_replies: true
+  check_every_minutes: 120
+
+# Emails to recruiters (found with Hunter.io) and alumni you add in the app,
+# at companies you've applied to. Set the HUNTER_API_KEY secret to find recruiters.
+outreach:
+  enabled: false
+  auto_send: true              # false = drafts wait in the app until you tap Send
+  max_per_day: 10
+  max_per_company: 2
+  follow_up_after_days: 6      # one follow-up, never after a reply
+  hunter_monthly_credits: 50   # Hunter's free plan
+  signature: ""                # e.g. "linkedin.com/in/you | github.com/you"

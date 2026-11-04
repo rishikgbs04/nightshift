@@ -81,7 +81,7 @@ def test_swipe_actions_and_undo(home, monkeypatch):
     assert r["status"] == "approved" and r["previous"] == "queued" and r["counts"]["approved"] == 1
     r = client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "undo", "to": r["previous"]}).json()
     assert r["status"] == "queued"
-    assert client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "undo", "to": "submitted"}).status_code == 400
+    assert client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "undo", "to": "discovered"}).status_code == 400
     assert client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "delete"}).status_code == 400
     client.post("/api/action", json={"id": "greenhouse:acme:1", "do": "skip"})
     assert db.get("greenhouse:acme:1")["status"] == "skipped"

@@ -21,6 +21,9 @@ nightshift's answer:
 | **You approve, it does the busywork** | Discovery, ranking, tailoring and form-filling happen overnight. Required questions it can't answer from your profile or `answers.yaml` are **never guessed**; that job goes to *Needs you*. |
 | **No scraping** | Jobs come from the public job-board APIs Greenhouse, Lever and Ashby provide for every company careers page. No LinkedIn bots, no logins, full descriptions. |
 | **Honest gap report** | Keywords the job wants that you *don't* have are listed separately and never added. That list is your study plan. |
+| **Hears back for you** | Reads your inbox every two hours, matches recruiter replies to applications, sorts them (interview, assessment, offer, rejection) and pings your phone for the ones that need you. |
+| **Referral outreach** | Finds recruiters at companies you applied to (Hunter.io) and emails them and alumni you add, with a daily cap, one follow-up, and a stop the moment they reply. Every email goes through the same guard. |
+| **Hard budget cap** | Counts every token. When the month's AI budget is used, it keeps finding jobs but pauses rewriting until the 1st. |
 | **Resume or CV by country** | US/Canada roles get a 1-page Letter resume. UK, Ireland, EU, Australia and NZ roles get a 2-page A4 CV (configurable). |
 
 ## What the guard checks
@@ -52,7 +55,7 @@ discover ─► filter ─► pre-rank ─► LLM score ─► tailor ─► gua
 
 ## Run it in the cloud, use it from your phone
 
-`nightshift server` is the always-on mode: the app plus a built-in nightly schedule, behind a password. Deploy it once to Fly.io with the included `Dockerfile` and `fly.toml` (step by step in [DEPLOY.md](DEPLOY.md)), add it to your home screen, and install ntfy for the morning notification. Everything after that, including editing your profile and answers, happens in the app.
+`nightshift server` is the always-on mode: the app plus a built-in nightly schedule and inbox checks, behind a password. [DEPLOY.md](DEPLOY.md) walks through running it for $0 on Oracle Cloud's Always Free tier with a private Tailscale link (or about $7/month on Fly.io). Add it to your home screen and install ntfy for notifications. Everything after that, including editing your profile and answers, happens in the app.
 
 ## Quick start (on your laptop)
 
@@ -145,6 +148,9 @@ nightshift/
   web/         the phone app (FastAPI, installable PWA, password login)
   server.py    always-on mode with the nightly scheduler
   notify.py    morning push notifications via ntfy
+  mail.py      IMAP/SMTP (Gmail, school Google accounts, any provider)
+  replies.py   match recruiter replies to applications and classify them
+  outreach.py  recruiter lookup, guarded referral emails, follow-ups
   cli.py       `nightshift …`
 tests/         guard, parsers, filters, tailoring, pipeline, autopilot, app, form filling
 ```

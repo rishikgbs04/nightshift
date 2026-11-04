@@ -89,7 +89,7 @@ def tailor(
         j.location = location
     out = out or job_dir(cfg, j)
     typer.echo(f"Tailoring for {j.title} at {j.company} ...")
-    res = do_tailor(j, profile, cfg, make_llm(cfg.llm), out, kind=kind)
+    res = do_tailor(j, profile, cfg, make_llm(cfg), out, kind=kind)
 
     db = DB(cfg.db_path)
     db.upsert_new(j)
@@ -124,11 +124,14 @@ def run(config: Path = ConfigOpt, offline: bool = typer.Option(False, help="No L
     from . import notify
     from .db import DB as _DB
 
-    report = do_run(cfg, make_llm(cfg.llm), progress=lambda s: typer.echo(f"  {s}"))
+    report = do_run(cfg, make_llm(cfg), progress=lambda s: typer.echo(f"  {s}"))
     typer.echo("\n" + report.markdown())
     counts = _DB(cfg.db_path).counts()
     title, msg = notify.morning_message(counts.get("queued", 0), report.auto_approved, report.submitted,
                                         counts.get("needs_human", 0))
+    if report.good_news:
+        msg = "\n".join(report.good_news[:3]) + "\n" + msg
+        title = report.good_news[0].split(":")[0] if len(report.good_news) == 1 else f"{len(report.good_news)} replies need you"
     notify.send(cfg.notify, title, msg)
     _notify(msg, title)
 
@@ -169,7 +172,7 @@ def submit(config: Path = ConfigOpt, live: Optional[bool] = typer.Option(None, h
     if live is not None:
         cfg.submit.live = live
     s = submit_approved(DB(cfg.db_path), cfg, Profile.load(cfg.resolve(cfg.profile_path)),
-                        llm=make_llm(cfg.llm), progress=lambda m: typer.echo(f"  {m}"))
+                        llm=make_llm(cfg), progress=lambda m: typer.echo(f"  {m}"))
     typer.echo(f"submitted {s.submitted}, need you: {s.needs_human}")
     for e in s.errors:
         typer.echo(f"  ! {e}")

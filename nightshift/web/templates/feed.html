@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_icons.html" import gear, plus %}
+{% from "_icons.html" import gear, plus, inbox, people %}
 {% from "_card.html" import job_card %}
 {% block body %}
 {% set n = h.counts.get('queued', 0) %}
@@ -9,6 +9,8 @@
       <a class="brand" href="/"><span class="moon" aria-hidden="true"></span>nightshift</a>
       <div class="right">
         <a class="icon-btn" href="/add" aria-label="Add a job yourself">{{ plus() }}</a>
+        <a class="icon-btn" href="/people" aria-label="Recruiters and alumni">{{ people() }}</a>
+        <a class="icon-btn has-dot" href="/inbox" aria-label="Replies{% if h.unread %}, {{ h.unread }} new{% endif %}">{{ inbox() }}{% if h.unread %}<span class="badge">{{ h.unread }}</span>{% endif %}</a>
         <a class="icon-btn" href="/settings" aria-label="Settings">{{ gear() }}</a>
       </div>
     </div>
@@ -24,6 +26,7 @@
       {% else %}No nightly search on this computer yet{% endif %}
     </p>
     <div class="stats">
+      {% if h.counts.get('interview', 0) %}<div class="stat"><b data-count="interview">{{ h.counts.get('interview', 0) }}</b><span>interviews</span></div>{% endif %}
       <div class="stat"><b data-count="approved">{{ h.counts.get('approved', 0) }}</b><span>approved</span></div>
       <div class="stat"><b data-count="submitted">{{ h.counts.get('submitted', 0) }}</b><span>applied</span></div>
       <div class="stat"><b data-count="needs_human">{{ h.counts.get('needs_human', 0) }}</b><span>need you</span></div>
@@ -64,6 +67,9 @@
     {% elif status == 'approved' %}
       <h2>No approved jobs waiting</h2>
       <p>{% if h.scheduled %}Jobs you approve are sent during the next nightly search.{% else %}Jobs you approve wait here until you apply.{% endif %}</p>
+    {% elif status == 'interview' %}
+      <h2>No interviews yet</h2>
+      <p>When a recruiter asks to talk or sends an assessment, the job moves here and your phone buzzes.</p>
     {% elif status == 'submitted' %}
       <h2>No applications sent yet</h2>
       <p>Approved jobs show up here once they're submitted.</p>

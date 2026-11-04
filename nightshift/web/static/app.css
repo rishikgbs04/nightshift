@@ -232,3 +232,22 @@ label:first-child { margin-top: 0; }
   .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
   .detail-grid > .col { display: grid; gap: 12px; }
 }
+
+/* ---------------------------------------------------------------- inbox & people */
+.icon-btn.has-dot { position: relative; }
+.badge { position: absolute; top: 5px; right: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--dawn); color: #23140A; font-size: 11.5px; font-weight: 700; display: grid; place-items: center;
+  font-variant-numeric: tabular-nums; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.msg-top { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: start; }
+.msg-who .org { margin-top: 2px; }
+.when { margin-left: auto; padding-left: 10px; font-weight: 400; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.msg details > summary { font-weight: 500; gap: 10px; }
+.chip.kind.interview, .chip.kind.assessment, .chip.kind.offer, .chip.kind.referral,
+.chip.status-replied { background: var(--approve-soft); color: var(--approve); font-weight: 600; }
+.chip.kind.rejection, .chip.status-failed { background: var(--skip-soft); color: var(--skip); }
+.chip.status-drafted, .chip.status-approved { background: var(--flag-soft); color: var(--flag); }
+.msg.kind-offer, .msg.kind-interview { box-shadow: inset 4px 0 0 var(--approve), var(--shadow); }
+.select { width: 100%; font: inherit; font-size: 16px; padding: 12px; border-radius: var(--radius-ctl);
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); appearance: none; }
+.contact .actions { margin-top: 12px; }

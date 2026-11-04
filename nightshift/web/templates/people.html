@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_pagehead.html" import pagehead %}
+{% block title %}People{% endblock %}
+{% block body %}
+{{ pagehead("People", "Recruiters and alumni at companies you've applied to. nightshift writes to them for you.") }}
+<main class="wrap sections">
+  <section class="panel">
+    {% if not cfg.outreach.enabled %}
+      <p class="status-line"><span class="dot"></span><span>Outreach is off. Emails are drafted but not sent.</span></p>
+      <p class="note">Turn on <b>outreach: enabled: true</b> in Settings when you're ready.</p>
+    {% elif not email_ready %}
+      <p class="status-line"><span class="dot bad"></span><span>Email isn't connected, so nothing can be sent.</span></p>
+      <p class="note"><a href="/settings#email-panel">Connect your email</a></p>
+    {% else %}
+      <p class="status-line"><span class="dot on"></span><span>{{ 'Sending' if cfg.outreach.auto_send else 'Sending the ones you approve' }}: {{ sent_today }} of {{ cfg.outreach.max_per_day }} today</span></p>
+      <p class="note">One follow-up after {{ cfg.outreach.follow_up_after_days }} days, never after a reply.{% if has_hunter %} Recruiter lookups: {{ hunter_used }} of {{ cfg.outreach.hunter_monthly_credits }} this month.{% endif %}</p>
+    {% endif %}
+  </section>
+
+  {% for c in rows %}
+  <article class="panel contact" data-cid="{{ c.id }}">
+    <div class="msg-top">
+      <div class="avatar" style="--h: {{ avatar_hue(c.company) }}" aria-hidden="true">{{ initials(c.name or c.company) }}</div>
+      <div class="msg-who">
+        <p class="role" style="font-size:16px">{{ c.name or c.email }}</p>
+        <p class="org">{{ c.title or c.kind | capitalize }}, <b>{{ c.company }}</b>{% if c.note %}<br>{{ c.note }}{% endif %}</p>
+      </div>
+      <span class="chip status-{{ c.status }}" data-label>{{ 'Sends tonight' if c.status == 'drafted' and cfg.outreach.auto_send else CONTACT_LABEL.get(c.status, c.status) }}</span>
+    </div>
+    {% if c.job_title %}<p class="note">About: {{ c.job_title }}</p>{% endif %}
+    {% if c.error %}<p class="err">{{ c.error }}</p>{% endif %}
+    {% if c.body %}
+    <details style="margin-top:10px" {{ 'open' if c.status == 'drafted' and not cfg.outreach.auto_send }}>
+      <summary style="font-size:15px">{{ c.subject }}</summary>
+      {% if c.status in ('drafted', 'approved', 'skipped') %}
+      <input type="text" class="c-subject" value="{{ c.subject }}" aria-label="Subject" style="margin-top:6px">
+      <textarea class="c-body" aria-label="Email" style="min-height:200px;margin-top:8px">{{ c.body }}</textarea>
+      <p style="margin-top:8px"><button class="btn small" type="button" data-cact="save">Save changes</button></p>
+      {% else %}
+      <div class="jd" style="margin-top:6px">{{ c.body }}</div>
+      {% endif %}
+    </details>
+    {% endif %}
+    {% if c.status == 'drafted' and cfg.outreach.auto_send %}
+    <div class="actions one"><button class="btn" type="button" data-cact="skip">Don't send</button></div>
+    {% elif c.status == 'drafted' %}
+    <div class="actions">
+      <button class="btn" type="button" data-cact="skip">Don't send</button>
+      <button class="btn approve" type="button" data-cact="send">Send tonight</button>
+    </div>
+    {% elif c.status in ('skipped',) %}
+    <div class="actions one"><button class="btn" type="button" data-cact="restore">Undo</button></div>
+    {% elif c.status in ('new', 'approved') %}
+    <div class="actions one"><button class="btn" type="button" data-cact="skip">Don't contact</button></div>
+    {% endif %}
+  </article>
+  {% endfor %}
+
+  <section class="panel" id="add">
+    <details {{ 'open' if error or not rows }}>
+      <summary>Add someone you know</summary>
+      <form method="post" action="/people/add">
+        {% if error %}<p class="err" style="margin:0 0 6px">{{ error }}</p>{% endif %}
+        {% if added %}<p class="ok-msg" style="margin:0 0 6px">Added. They'll get an email once you've applied at their company.</p>{% endif %}
+        <label for="p-name">Name</label><input type="text" id="p-name" name="name" autocomplete="off">
+        <label for="p-email">Email</label><input type="text" id="p-email" name="email" inputmode="email" autocomplete="off" required>
+        <label for="p-company">Company</label><input type="text" id="p-company" name="company" autocomplete="off" required>
+        <label for="p-title">Their role</label><input type="text" id="p-title" name="title" autocomplete="off">
+        <label for="p-note">How you're connected</label><input type="text" id="p-note" name="note" placeholder="NYU MS CS '24, met at HSU Diwali" autocomplete="off">
+        <label for="p-kind">They are</label>
+        <select id="p-kind" name="kind" class="select"><option value="alumni">An alum</option><option value="recruiter">A recruiter</option><option value="other">Someone else</option></select>
+        <p style="margin-top:14px"><button class="btn approve" style="width:100%">Add</button></p>
+      </form>
+    </details>
+  </section>
+</main>
+{% endblock %}

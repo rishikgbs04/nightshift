@@ -22,6 +22,32 @@
     <p style="margin-top:12px"><button class="btn dark" type="button" id="run-now" {{ 'disabled' if run.running }}>Run now</button></p>
   </section>
 
+  <section class="panel" id="budget-panel">
+    <h2>AI spending this month</h2>
+    {% set cap = cfg.llm.monthly_budget_usd %}
+    <div class="kv" style="margin-bottom:8px">
+      <div><b>${{ '%.2f' | format(spend.usd) }}</b><span>of ${{ '%.2f' | format(cap) }} cap</span></div>
+      <div><b>{{ spend.calls }}</b><span>AI calls</span></div>
+    </div>
+    {% if cap %}<div class="bar" style="height:8px"><i style="width: {{ [100, (100 * spend.usd / cap) | round | int] | min }}%;{{ ' background: var(--flag)' if spend.usd >= cap * 0.85 }}"></i></div>{% endif %}
+    <p class="note">{% if cap and spend.usd >= cap %}Cap reached: jobs are still found and your resume is reordered, but AI rewriting pauses until the 1st.{% else %}Using {{ cfg.llm.model }}. When the cap is reached, AI rewriting pauses until the 1st.{% endif %}</p>
+  </section>
+
+  <section class="panel" id="email-panel">
+    <h2>Email</h2>
+    {% if cfg.email.ready() %}
+    <p class="status-line"><span class="dot on"></span><span>Connected as {{ cfg.email.address }}</span></p>
+    <p class="note">Replies are checked every {{ cfg.email.check_every_minutes // 60 if cfg.email.check_every_minutes >= 60 else cfg.email.check_every_minutes }} {{ 'hours' if cfg.email.check_every_minutes >= 120 else 'hour' if cfg.email.check_every_minutes >= 60 else 'minutes' }} in the cloud version.</p>
+    <p style="margin-top:10px"><button class="btn small" type="button" id="inbox-check">Check replies now</button></p>
+    {% elif cfg.email.address %}
+    <p class="status-line"><span class="dot bad"></span><span>{{ cfg.email.address }} has no app password yet.</span></p>
+    <p class="note">Create one at myaccount.google.com/apppasswords and set it as the <b>{{ cfg.email.password_env }}</b> secret on your server.</p>
+    {% else %}
+    <p class="status-line"><span class="dot"></span><span>Not connected</span></p>
+    <p class="note">Add <b>email: address:</b> in config.yaml below, then set an app password as the <b>{{ cfg.email.password_env }}</b> secret on your server.</p>
+    {% endif %}
+  </section>
+
   <section class="panel">
     <h2>Phone notifications</h2>
     <p>Install the free ntfy app, subscribe to the topic in your settings below{% if cfg.notify.ntfy_topic %} (<b>{{ cfg.notify.ntfy_topic }}</b>){% endif %}, and you'll get a note each morning.</p>

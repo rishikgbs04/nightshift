@@ -13,7 +13,7 @@ from typing import Callable, Optional
 from . import filters, keywords, sources
 from .config import Config
 from .db import DB, row_to_job
-from .llm import LLM, LLMError
+from .llm import LLM, BudgetExceeded, LLMError
 from .models import Job, Profile
 from .render import PDFRenderer
 from .tailor import score_job, tailor
@@ -29,6 +29,11 @@ class RunReport:
     queued: int = 0
     auto_approved: int = 0
     submitted: int = 0
+    budget_hit: bool = False
+    replies_matched: int = 0
+    good_news: list[str] = field(default_factory=list)
+    outreach_sent: int = 0
+    outreach_followed_up: int = 0
     needs_human: int = 0
     errors: list[str] = field(default_factory=list)
     top: list[tuple[int, str, str]] = field(default_factory=list)
@@ -46,6 +51,12 @@ class RunReport:
         ]
         if self.submitted or self.needs_human:
             lines.append(f"- submitted: {self.submitted}, need you to finish: {self.needs_human}")
+        if self.replies_matched:
+            lines.append(f"- replies about your applications: {self.replies_matched}")
+        if self.outreach_sent or self.outreach_followed_up:
+            lines.append(f"- outreach emails: {self.outreach_sent} sent, {self.outreach_followed_up} follow-ups")
+        if self.good_news:
+            lines += ["", "## Needs you", ""] + [f"- {g}" for g in self.good_news]
         if self.top:
             lines += ["", "## Best matches", ""]
             lines += [f"- {s}/10  {company}: {title}" for s, company, title in self.top[:10]]
@@ -105,6 +116,10 @@ def score_and_tailor(db: DB, cfg: Config, llm: Optional[LLM], profile: Profile, 
         job = row_to_job(row)
         try:
             s = score_job(llm, profile, job)
+        except BudgetExceeded as e:
+            report.errors.append(str(e))
+            report.budget_hit = True
+            break  # unscored jobs stay "discovered" for next month
         except LLMError as e:
             report.errors.append(f"scoring {job.company} / {job.title}: {e}")
             continue
@@ -152,8 +167,10 @@ def score_and_tailor(db: DB, cfg: Config, llm: Optional[LLM], profile: Profile, 
 
 
 def run(cfg: Config, llm: Optional[LLM], db: Optional[DB] = None,
-        jobs: Optional[list[Job]] = None, progress: Callable[[str], None] = lambda s: None) -> RunReport:
-    """One full night. `jobs` overrides discovery (used by tests and `import`)."""
+        jobs: Optional[list[Job]] = None, progress: Callable[[str], None] = lambda s: None,
+        mailbox=None, sender=None, hunter=None) -> RunReport:
+    """One full night. `jobs`, `mailbox`, `sender` and `hunter` override the real
+    services (used by tests)."""
     db = db or DB(cfg.db_path)
     report = RunReport()
     profile = profile_cache(cfg)
@@ -171,6 +188,37 @@ def run(cfg: Config, llm: Optional[LLM], db: Optional[DB] = None,
         sub = submit_approved(db, cfg, profile, llm=llm, progress=progress)
         report.submitted, report.needs_human = sub.submitted, sub.needs_human
         report.errors += sub.errors
+
+    # Replies first (so nobody who answered gets a follow-up), then outreach.
+    if cfg.email.ready() or mailbox is not None or sender is not None:
+        from . import outreach, replies
+        from .mail import ImapMailbox, MailError, SmtpSender
+
+        if cfg.email.check_replies:
+            try:
+                box = mailbox or ImapMailbox(cfg.email)
+                ir = replies.check(db, cfg, box, llm=llm, send_notification=False, progress=progress)
+                report.replies_matched, report.good_news = ir.matched, ir.good_news
+            except MailError as e:
+                report.errors.append(f"inbox: {e}")
+        if cfg.outreach.enabled:
+            try:
+                snd = sender or SmtpSender(cfg.email)
+            except MailError as e:
+                report.errors.append(f"outreach: {e}")
+                snd = None
+            orp = outreach.run(db, cfg, profile, snd, llm=llm, hunter=hunter, progress=progress)
+            report.outreach_sent, report.outreach_followed_up = orp.sent, orp.followed_up
+            report.errors += orp.errors
+
+    if report.budget_hit:
+        key = f"budget_notified_{datetime.now():%Y-%m}"
+        if not db.kv_get(key):
+            from . import notify
+            notify.send(cfg.notify, "AI budget used up for this month",
+                        f"nightshift keeps finding jobs but stops AI tailoring until the 1st "
+                        f"(cap: ${cfg.llm.monthly_budget_usd:.2f}).")
+            db.kv_set(key, "1")
 
     digest = report.markdown()
     (cfg.home / "data").mkdir(parents=True, exist_ok=True)

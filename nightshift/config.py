@@ -13,11 +13,18 @@ from pydantic import BaseModel, Field
 class LLMConfig(BaseModel):
     # "anthropic" | "openai" (any OpenAI-compatible endpoint, e.g. a local gateway) | "offline"
     provider: Literal["anthropic", "openai", "offline"] = "anthropic"
-    model: str = "claude-sonnet-5-5"
+    model: str = "claude-haiku-5-5"
     base_url: Optional[str] = None  # for provider=openai, e.g. http://localhost:8000/v1
     api_key_env: str = "ANTHROPIC_API_KEY"
     temperature: float = 0.2
     max_tokens: int = 4000
+    # Hard spending cap per calendar month (USD). When it's reached, model calls
+    # stop until the 1st: tailoring falls back to offline mode, nothing is
+    # drafted, and you get one notification. 0 = no cap.
+    monthly_budget_usd: float = 9.0
+    # Price per million tokens, used to count spend. Defaults are Claude Haiku 5.5.
+    price_input_per_mtok: float = 0.10
+    price_output_per_mtok: float = 0.50
 
     def api_key(self) -> Optional[str]:
         return os.environ.get(self.api_key_env)
@@ -128,6 +135,47 @@ class NotifyConfig(BaseModel):
     app_url: str = ""  # where the notification opens, e.g. https://your-app.fly.dev
 
 
+class EmailConfig(BaseModel):
+    """Your mailbox, for reading recruiter replies and sending outreach.
+
+    Works with any IMAP/SMTP account. For Gmail or NYU (Google) email, turn on
+    2-Step Verification and create an app password at
+    myaccount.google.com/apppasswords, then put it in the environment variable
+    named by password_env (never in this file)."""
+    address: str = ""
+    from_name: str = ""
+    password_env: str = "NIGHTSHIFT_EMAIL_PASSWORD"
+    imap_host: str = "imap.gmail.com"
+    imap_port: int = 993
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 465
+    check_replies: bool = True
+    check_every_minutes: int = 120
+    lookback_days: int = 30  # how far back the first inbox check looks
+
+    def password(self) -> Optional[str]:
+        return os.environ.get(self.password_env)
+
+    def ready(self) -> bool:
+        return bool(self.address and self.password())
+
+
+class OutreachConfig(BaseModel):
+    """Emails to recruiters and alumni at companies you've applied to."""
+    enabled: bool = False
+    auto_send: bool = True  # false = drafts wait in the app until you tap Send
+    max_per_day: int = 10  # first emails + follow-ups, across everyone
+    max_per_company: int = 2
+    follow_up_after_days: int = 6  # one follow-up, only if they haven't replied
+    # Find recruiter emails with Hunter.io (free plan: 50 credits/month).
+    hunter_api_key_env: str = "HUNTER_API_KEY"
+    hunter_monthly_credits: int = 50
+    signature: str = ""  # appended to every email, e.g. your LinkedIn URL
+
+    def hunter_key(self) -> Optional[str]:
+        return os.environ.get(self.hunter_api_key_env)
+
+
 class Config(BaseModel):
     home: Path = Path(".")
     profile_path: Path = Path("profile.yaml")
@@ -140,6 +188,8 @@ class Config(BaseModel):
     submit: SubmitConfig = Field(default_factory=SubmitConfig)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    email: EmailConfig = Field(default_factory=EmailConfig)
+    outreach: OutreachConfig = Field(default_factory=OutreachConfig)
 
     @property
     def db_path(self) -> Path:

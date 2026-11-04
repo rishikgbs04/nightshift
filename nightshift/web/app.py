@@ -34,11 +34,16 @@ from ..tailor import output_files, tailor
 from . import auth
 
 HERE = Path(__file__).parent
-TABS = [("queued", "Review"), ("approved", "Approved"), ("needs_human", "Needs you"),
-        ("submitted", "Applied"), ("skipped", "Skipped"), ("low_score", "Low match"),
+TABS = [("queued", "Review"), ("interview", "Interviews"), ("approved", "Approved"), ("needs_human", "Needs you"),
+        ("submitted", "Applied"), ("rejected", "Closed"), ("skipped", "Skipped"), ("low_score", "Low match"),
         ("failed", "Failed")]
 ACTIONS = {"approve": "approved", "skip": "skipped", "applied": "submitted", "requeue": "queued"}
-UNDOABLE_TO = {"queued", "approved", "needs_human", "skipped", "low_score"}
+UNDOABLE_TO = {"queued", "approved", "needs_human", "skipped", "low_score", "submitted", "interview", "rejected"}
+KIND_LABEL = {"interview": "Interview", "assessment": "Assessment", "offer": "Offer", "rejection": "Not moving forward",
+              "received": "Application received", "referral": "Reply", "other": "Other"}
+CONTACT_LABEL = {"new": "Waiting for an application", "drafted": "Email ready", "approved": "Will send tonight",
+                 "sent": "Sent", "followed_up": "Followed up", "replied": "Replied", "skipped": "Won't send",
+                 "failed": "Couldn't send"}
 
 
 def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
@@ -56,6 +61,9 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
     templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else []
     templates.env.globals["initials"] = _initials
     templates.env.globals["avatar_hue"] = _hue
+    templates.env.globals["KIND_LABEL"] = KIND_LABEL
+    templates.env.globals["CONTACT_LABEL"] = CONTACT_LABEL
+    templates.env.filters["ago"] = _ago
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     # ------------------------------------------------------------------ auth
@@ -166,7 +174,9 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
         if last:
             last_run = datetime.fromisoformat(last["at"]).astimezone(tz)
         h, m = (int(x) for x in cfg.schedule.time.split(":"))
-        return {"greeting": f"{greet}, {first}" if first else greet,
+        good = db.conn.execute("SELECT COUNT(*) FROM messages WHERE kind IN ('interview','assessment','offer','referral')"
+                               " AND at >= ?", (db.kv_get("inbox_seen_at", "1970-01-01"),)).fetchone()[0]
+        return {"greeting": f"{greet}, {first}" if first else greet, "unread": good,
                 "scheduled": scheduled and cfg.schedule.enabled,
                 "last_run": last_run, "next_time": datetime(2000, 1, 1, h, m),
                 "counts": db.counts()}
@@ -270,7 +280,7 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
         profile: Profile = profile_cache(cfg)
         db.upsert_new(job)
         out = job_dir(cfg, job)
-        res = tailor(job, profile, cfg, make_llm(cfg.llm), out)
+        res = tailor(job, profile, cfg, make_llm(cfg), out)
         notes = [f"guard: {v.where}: {v.detail} ({v.action})" for v in res.violations]
         db.set(job.id, status="queued", out_dir=str(out), notes_json=notes)
         return job.id
@@ -304,6 +314,88 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
                       apply_url=url.strip(), description=description.strip())
         return RedirectResponse(f"/job?id={_tailor_and_store(job)}", status_code=303)
 
+    # ------------------------------------------------------------------ inbox & people
+
+    @app.get("/inbox", response_class=HTMLResponse)
+    def inbox(request: Request):
+        rows = db.conn.execute(
+            "SELECT m.*, j.company AS job_company, j.title AS job_title, c.name AS contact_name, c.company AS contact_company"
+            " FROM messages m LEFT JOIN jobs j ON j.id = m.job_id LEFT JOIN contacts c ON c.id = m.contact_id"
+            " ORDER BY m.at DESC LIMIT 200").fetchall()
+        resp = templates.TemplateResponse(request, "inbox.html", {
+            "rows": rows, "email_ready": state["cfg"].email.ready(), "cfg": state["cfg"],
+            "last_check": db.kv_get("inbox_checked_at", "")})
+        db.kv_set("inbox_seen_at", datetime.now().astimezone().isoformat(timespec="seconds"))
+        return resp
+
+    @app.post("/api/inbox-check")
+    def inbox_check():
+        from .. import replies
+        from ..mail import ImapMailbox, MailError
+        cfg = state["cfg"]
+        try:
+            try:
+                llm = make_llm(cfg)
+            except Exception:  # noqa: BLE001
+                llm = None
+            r = replies.check(db, cfg, ImapMailbox(cfg.email), llm=llm)
+            return {"ok": True, "checked": r.checked, "matched": r.matched}
+        except MailError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    @app.get("/people", response_class=HTMLResponse)
+    def people(request: Request, error: str = "", added: str = ""):
+        from ..outreach import hunter_credits_used, sent_today
+        cfg = state["cfg"]
+        rows = db.conn.execute("SELECT c.*, j.title AS job_title FROM contacts c LEFT JOIN jobs j ON j.id = c.job_id"
+                               " ORDER BY CASE c.status WHEN 'replied' THEN 0 WHEN 'drafted' THEN 1 WHEN 'approved' THEN 2"
+                               " WHEN 'new' THEN 3 ELSE 4 END, c.created_at DESC").fetchall()
+        return templates.TemplateResponse(request, "people.html", {
+            "rows": rows, "cfg": cfg, "error": error, "added": added,
+            "sent_today": sent_today(db), "hunter_used": hunter_credits_used(db),
+            "has_hunter": bool(cfg.outreach.hunter_key()), "email_ready": cfg.email.ready()})
+
+    @app.post("/people/add")
+    def people_add(email: str = Form(...), company: str = Form(...), name: str = Form(""), title: str = Form(""),
+                   kind: str = Form("alumni"), note: str = Form("")):
+        from urllib.parse import quote
+
+        from ..outreach import add_contact
+        if kind not in ("alumni", "recruiter", "other"):
+            kind = "other"
+        try:
+            new = add_contact(db, email, company, name, title, kind=kind, note=note)
+        except ValueError as e:
+            return RedirectResponse(f"/people?error={quote(str(e))}", status_code=303)
+        if new is None:
+            return RedirectResponse(f"/people?error={quote('You already have that person')}", status_code=303)
+        return RedirectResponse("/people?added=1", status_code=303)
+
+    @app.post("/api/contact")
+    async def contact_action(request: Request):
+        body = await request.json()
+        cid, do = int(body.get("id", 0)), body.get("do", "")
+        row = db.conn.execute("SELECT * FROM contacts WHERE id = ?", (cid,)).fetchone()
+        if row is None:
+            raise HTTPException(404)
+        new = {"skip": "skipped", "send": "approved", "restore": "drafted" if row["body"] else "new"}.get(do)
+        if new is None or (do == "send" and row["status"] not in ("drafted", "skipped")):
+            raise HTTPException(400, "can't do that")
+        db.conn.execute("UPDATE contacts SET status = ? WHERE id = ?", (new, cid))
+        db.conn.commit()
+        return {"ok": True, "status": new, "label": CONTACT_LABEL[new]}
+
+    @app.post("/api/contact-edit")
+    async def contact_edit(request: Request):
+        body = await request.json()
+        cid = int(body.get("id", 0))
+        cfg = state["cfg"]
+        text, _ = guard.enforce_letter(str(body.get("body", "")).replace("\r\n", "\n"), profile_cache(cfg))
+        db.conn.execute("UPDATE contacts SET subject = ?, body = ? WHERE id = ? AND status IN ('drafted','approved','skipped')",
+                        (str(body.get("subject", ""))[:120], text, cid))
+        db.conn.commit()
+        return {"ok": True, "body": text}
+
     # ------------------------------------------------------------------ settings
 
     FILES = {"profile": "Your resume (profile.yaml)", "answers": "Application answers (answers.yaml)",
@@ -327,6 +419,7 @@ def create_app(cfg: Config, db: Optional[DB] = None, runner=None,
             "files": FILES, "texts": texts, "saved": saved, "error": error, "which": which,
             "cfg": cfg, "run": runner.state, "has_key": bool(cfg.llm.api_key()) or cfg.llm.provider == "offline",
             "todo": todo, "h": header(cfg), "answer_rows": answer_rows,
+            "spend": __import__("nightshift.llm", fromlist=["spend_for"]).spend_for(cfg).this_month(),
         })
 
     @app.post("/settings/answers-form")
@@ -401,6 +494,24 @@ def _pretty_pattern(pattern: str) -> str:
     first = pattern.split("|")[0]
     first = re.sub(r"\\b|[\^$?*+()\[\]]", "", first)
     return first[:1].upper() + first[1:] if first else pattern
+
+
+def _ago(iso: str) -> str:
+    if not iso:
+        return ""
+    try:
+        t = datetime.fromisoformat(iso)
+    except ValueError:
+        return ""
+    now = datetime.now(t.tzinfo) if t.tzinfo else datetime.now()
+    secs = (now - t).total_seconds()
+    if secs < 3600:
+        return f"{max(1, int(secs // 60))} min ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)} h ago"
+    if secs < 86400 * 7:
+        return f"{int(secs // 86400)} d ago"
+    return t.strftime("%b %-d")
 
 
 def _hue(company: str) -> int:

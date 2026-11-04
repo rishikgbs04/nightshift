@@ -13,8 +13,9 @@ from .models import Job
 
 # discovered -> filtered_out | scored -> low_score | queued -> approved | skipped
 # approved -> submitted | needs_human | failed
+# submitted -> interview | rejected (from recruiter replies)
 STATUSES = ["discovered", "filtered_out", "scored", "low_score", "queued", "approved", "skipped",
-            "submitted", "needs_human", "failed"]
+            "submitted", "needs_human", "failed", "interview", "rejected"]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -38,6 +39,28 @@ CREATE TABLE IF NOT EXISTS jobs (
   error TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,           -- the email's Message-ID
+  at TEXT NOT NULL,
+  from_addr TEXT, from_name TEXT, subject TEXT, snippet TEXT,
+  job_id TEXT, contact_id INTEGER,
+  kind TEXT,                     -- interview | assessment | offer | rejection | received | referral | other
+  summary TEXT
+);
+CREATE TABLE IF NOT EXISTS contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT, title TEXT, company TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'recruiter',   -- recruiter | alumni | other
+  source TEXT NOT NULL DEFAULT 'manual',    -- manual | hunter
+  note TEXT,                                -- how you know them, e.g. "NYU MS '24"
+  job_id TEXT,
+  status TEXT NOT NULL DEFAULT 'new',       -- new | drafted | sent | followed_up | replied | skipped | failed
+  subject TEXT, body TEXT, message_id TEXT,
+  sent_at TEXT, followed_up_at TEXT, replied_at TEXT, error TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS events (
   at TEXT NOT NULL,
   job_id TEXT,
@@ -107,6 +130,17 @@ class DB:
     def counts(self) -> dict[str, int]:
         rows = self.conn.execute("SELECT status, COUNT(*) n FROM jobs GROUP BY status").fetchall()
         return {r["status"]: r["n"] for r in rows}
+
+    def kv_get(self, k: str, default: str = "") -> str:
+        row = self.conn.execute("SELECT v FROM kv WHERE k = ?", (k,)).fetchone()
+        return row["v"] if row else default
+
+    def kv_set(self, k: str, v: str) -> None:
+        with self.tx() as c:
+            c.execute("INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", (k, v))
+
+    def events_since(self, kind: str, since_iso: str) -> int:
+        return self.conn.execute("SELECT COUNT(*) FROM events WHERE kind = ? AND at >= ?", (kind, since_iso)).fetchone()[0]
 
     def events(self, limit: int = 50) -> list[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM events ORDER BY rowid DESC LIMIT ?", (limit,)).fetchall()
