@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_pagehead.html" import pagehead %}
+{% block title %}Add a job{% endblock %}
+{% block body %}
+{{ pagehead("Add a job", "Found one yourself? Nightshift tailors your resume for it right now.") }}
+<main class="wrap sections">
+  <form class="panel" method="post" action="/tailor" id="add-form">
+    {% if error == 'link' %}<p class="err" style="margin:0 0 10px">That link didn't load. Paste the job description below instead.</p>{% endif %}
+    {% if error == 'empty' %}<p class="err" style="margin:0 0 10px">Add a link or paste the job description.</p>{% endif %}
+    <label for="url">Link to the posting</label>
+    <input type="url" id="url" name="url" placeholder="https://jobs.lever.co/…" inputmode="url" autocomplete="off">
+    <p class="note">Greenhouse, Lever and Ashby links work best. For other sites, paste the description too.</p>
+    <label for="company">Company</label>
+    <input type="text" id="company" name="company" autocomplete="off">
+    <label for="title">Role</label>
+    <input type="text" id="title" name="title" autocomplete="off">
+    <label for="location">Location</label>
+    <input type="text" id="location" name="location" placeholder="London, UK gets a 2-page CV" autocomplete="off">
+    <label for="description">Job description</label>
+    <textarea id="description" name="description"></textarea>
+    <p style="margin-top:14px"><button class="btn approve" style="width:100%" id="add-btn">Tailor my resume</button></p>
+    <p class="note" id="add-wait" hidden>Tailoring takes about 20 seconds.</p>
+  </form>
+</main>
+{% endblock %}

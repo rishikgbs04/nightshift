@@ -1,0 +1,49 @@
+{% from "_icons.html" import check, ext %}
+{% macro dial(score) -%}
+{% set s = score or 0 %}
+<div class="dial {{ 'hi' if s >= 8 else 'mid' if s >= 6 else '' }}" style="--p: {{ s * 10 }}" aria-label="Match score {{ score or 'not scored' }} out of 10">
+  <span>{{ score if score else '–' }}<small>/10</small></span>
+</div>
+{%- endmacro %}
+
+{% macro job_card(c, status) -%}
+<div class="swipe" data-id="{{ c.id }}" data-status="{{ c.status }}">
+  <div class="under" aria-hidden="true"><span class="yes">Approve</span><span class="no">Skip</span></div>
+  <article class="card" {% if status == 'queued' %}data-swipeable{% endif %}>
+    <a class="card-top" href="/job?id={{ c.id | urlencode }}">
+      <div class="avatar" style="--h: {{ avatar_hue(c.company) }}" aria-hidden="true">{{ initials(c.company) }}</div>
+      <div>
+        <h3 class="role">{{ c.title }}</h3>
+        <p class="org"><b>{{ c.company }}</b>{% if c.location %}<br>{{ c.location }}{% endif %}</p>
+      </div>
+      {{ dial(c.score) }}
+    </a>
+    {% if c.why %}<p class="why">{{ c.why | join('. ') }}{{ '' if (c.why | last).endswith('.') else '.' }}</p>{% endif %}
+    {% if c.flags or c.red_flags or c.kind == 'cv' %}
+    <div class="chips">
+      {% for f in c.flags %}<span class="chip flag">{{ f.replace('sponsorship: posting says', 'Says') }}</span>{% endfor %}
+      {% for f in c.red_flags %}<span class="chip flag">{{ f }}</span>{% endfor %}
+      {% if c.kind == 'cv' %}<span class="chip">2-page CV</span>{% endif %}
+    </div>
+    {% endif %}
+    {% if c.wanted %}
+    <div class="match"><div class="bar"><i style="width: {{ (100 * c.matched / c.wanted) | round | int }}%"></i></div><span>{{ c.matched }} of {{ c.wanted }} skills they list</span></div>
+    {% endif %}
+    {% if c.error %}<p class="note">{{ c.error }}</p>{% endif %}
+
+    {% if status == 'queued' %}
+    <div class="actions">
+      <button class="btn" type="button" data-act="skip">Skip</button>
+      <button class="btn approve" type="button" data-act="approve">{{ check() }} Approve</button>
+    </div>
+    {% elif status in ('needs_human', 'approved') %}
+    <div class="actions {{ 'one' if not c.apply_url }}">
+      {% if c.apply_url %}<a class="btn" href="{{ c.apply_url }}" target="_blank" rel="noopener">Open form {{ ext() }}</a>{% endif %}
+      <button class="btn approve" type="button" data-act="applied">{{ check() }} I applied</button>
+    </div>
+    {% elif status in ('skipped', 'low_score') %}
+    <div class="actions one"><button class="btn" type="button" data-act="requeue">Move to review</button></div>
+    {% endif %}
+  </article>
+</div>
+{%- endmacro %}

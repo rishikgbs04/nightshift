@@ -113,6 +113,21 @@ class SubmitConfig(BaseModel):
     headless: bool = True
 
 
+class ScheduleConfig(BaseModel):
+    """Used by `nightshift server`: runs the nightly pipeline by itself."""
+    enabled: bool = True
+    time: str = "02:17"  # local time, 24h
+    timezone: str = "America/New_York"
+
+
+class NotifyConfig(BaseModel):
+    # Free push notifications via the ntfy app (ntfy.sh). Pick a long, random
+    # topic name; anyone who knows it can read your notifications.
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
+    app_url: str = ""  # where the notification opens, e.g. https://your-app.fly.dev
+
+
 class Config(BaseModel):
     home: Path = Path(".")
     profile_path: Path = Path("profile.yaml")
@@ -123,6 +138,8 @@ class Config(BaseModel):
     tailor: TailorConfig = Field(default_factory=TailorConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     submit: SubmitConfig = Field(default_factory=SubmitConfig)
+    schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
 
     @property
     def db_path(self) -> Path:

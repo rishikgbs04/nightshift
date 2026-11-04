@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_pagehead.html" import pagehead %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+{{ pagehead("Settings") }}
+<main class="wrap sections">
+  <section class="panel" id="run-panel">
+    <h2>Nightly run</h2>
+    <p class="status-line"><span class="dot {{ 'on' if run.running else 'bad' if run.error else '' }}" id="run-dot"></span>
+      <span id="run-text">
+      {% if run.running %}Running now
+      {% elif run.error %}Last run failed: {{ run.error }}
+      {% elif cfg.schedule.enabled %}Runs every night at {{ h.next_time.strftime('%-I:%M %p') }} ({{ cfg.schedule.timezone.split('/')[-1].replace('_', ' ') }} time)
+      {% else %}Nightly run is off{% endif %}
+      </span></p>
+    {% if not has_key %}<p class="err">Add your API key before the first run (see the setup guide).</p>{% endif %}
+    {% if todo %}
+    <p class="note" style="color:var(--flag)">{{ todo | length }} application question{{ 's' if todo | length != 1 }} still unanswered. Jobs that ask {{ 'them' if todo | length != 1 else 'it' }} wait for you. <a href="#answers-form">Answer now</a></p>
+    {% endif %}
+    <div class="log" id="run-log">{{ run.log[-6:] | join('\n') }}</div>
+    <p style="margin-top:12px"><button class="btn dark" type="button" id="run-now" {{ 'disabled' if run.running }}>Run now</button></p>
+  </section>
+
+  <section class="panel">
+    <h2>Phone notifications</h2>
+    <p>Install the free ntfy app, subscribe to the topic in your settings below{% if cfg.notify.ntfy_topic %} (<b>{{ cfg.notify.ntfy_topic }}</b>){% endif %}, and you'll get a note each morning.</p>
+    <p style="margin-top:12px"><button class="btn small" type="button" id="notify-test" {{ 'disabled' if not cfg.notify.ntfy_topic }}>Send a test notification</button></p>
+    <p class="note" id="notify-result" hidden></p>
+  </section>
+
+  <section class="panel" id="answers-form">
+    <h2>Your answers to application questions</h2>
+    <p class="note" style="margin-top:0">Used word for word on application forms. Leave one blank and jobs that ask it come to you instead of being guessed.</p>
+    <form method="post" action="/settings/answers-form">
+      {% for a in answer_rows %}
+      <label for="a{{ a.i }}">{{ a.label }}</label>
+      <input type="text" id="a{{ a.i }}" name="a{{ a.i }}" value="{{ a.value }}" autocomplete="off">
+      {% endfor %}
+      {% if saved == 'answers-form' %}<p class="ok-msg">Saved.</p>{% endif %}
+      <p style="margin-top:14px"><button class="btn small">Save answers</button></p>
+    </form>
+  </section>
+
+  <p class="sub-h" style="margin:10px 2px 0">Advanced: edit the files directly</p>
+  {% for key, label in files.items() %}
+  <section class="panel" id="{{ key }}">
+    <details {{ 'open' if which == key or saved == key }}>
+      <summary>{{ label }}</summary>
+      <form method="post" action="/settings/{{ key }}">
+        <textarea class="code" name="text" spellcheck="false" autocapitalize="off" aria-label="{{ label }}">{{ texts[key] }}</textarea>
+        {% if which == key and error %}<p class="err">Not saved: {{ error }}</p>{% endif %}
+        {% if saved == key %}<p class="ok-msg">Saved.</p>{% endif %}
+        <p style="margin-top:10px"><button class="btn small">Save</button></p>
+      </form>
+    </details>
+  </section>
+  {% endfor %}
+
+  <form method="post" action="/logout"><button class="btn small" style="width:100%">Sign out</button></form>
+</main>
+{% endblock %}

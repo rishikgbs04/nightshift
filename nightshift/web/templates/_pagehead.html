@@ -1,0 +1,10 @@
+{% from "_icons.html" import back %}
+{% macro pagehead(title, sub="") -%}
+<header class="page-head">
+  <div class="wrap">
+    <div class="topbar"><a class="icon-btn" href="/" aria-label="Back to your jobs" style="margin-left:-10px">{{ back() }}</a></div>
+    <h1 style="margin-top:6px">{{ title }}</h1>
+    {% if sub %}<p class="org">{{ sub }}</p>{% endif %}
+  </div>
+</header>
+{%- endmacro %}

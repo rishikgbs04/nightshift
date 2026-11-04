@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% from "_icons.html" import gear, plus %}
+{% from "_card.html" import job_card %}
+{% block body %}
+{% set n = h.counts.get('queued', 0) %}
+<header class="night">
+  <div class="wrap">
+    <div class="topbar">
+      <a class="brand" href="/"><span class="moon" aria-hidden="true"></span>nightshift</a>
+      <div class="right">
+        <a class="icon-btn" href="/add" aria-label="Add a job yourself">{{ plus() }}</a>
+        <a class="icon-btn" href="/settings" aria-label="Settings">{{ gear() }}</a>
+      </div>
+    </div>
+    <p class="greeting">{{ h.greeting }}</p>
+    <h1 class="headline" id="headline">
+      {% if n %}{{ n }} {{ 'job' if n == 1 else 'jobs' }} ready for you
+      {% else %}You're all caught up{% endif %}
+    </h1>
+    <p class="sub">
+      {% if run.running %}Working on tonight's run now
+      {% elif h.last_run %}Tailored {{ 'today' if h.last_run.date() == h.last_run.now(h.last_run.tzinfo).date() else 'on ' ~ h.last_run.strftime('%b %-d') }} at {{ h.last_run.strftime('%-I:%M %p') }}
+      {% else %}First run tonight at {{ h.next_time.strftime('%-I:%M %p') }}{% endif %}
+    </p>
+    <div class="stats">
+      <div class="stat"><b data-count="approved">{{ h.counts.get('approved', 0) }}</b><span>approved</span></div>
+      <div class="stat"><b data-count="submitted">{{ h.counts.get('submitted', 0) }}</b><span>applied</span></div>
+      <div class="stat"><b data-count="needs_human">{{ h.counts.get('needs_human', 0) }}</b><span>need you</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <nav class="wrap" aria-label="Filter jobs">
+    {% for key, name in tabs %}
+    {% set k = h.counts.get(key, 0) %}
+    {% if k or key in ('queued', 'approved', 'needs_human', 'submitted') %}
+    <a class="tab {{ 'on' if key == status }}" href="/?status={{ key }}" {% if key == status %}aria-current="page"{% endif %}>{{ name }}<span class="c">{{ k }}</span></a>
+    {% endif %}
+    {% endfor %}
+  </nav>
+</div>
+
+<main class="wrap feed" id="feed" data-status="{{ status }}">
+  {% if cards and status == 'queued' %}<p class="hint-row">Swipe right to approve, left to skip</p>{% endif %}
+  {% for c in cards %}{{ job_card(c, status) }}{% endfor %}
+  {% if not cards %}
+  <section class="empty">
+    <div class="glyph" aria-hidden="true"></div>
+    {% if status == 'queued' %}
+      <h2>Nothing to review</h2>
+      <p>New matches arrive after tonight's run at {{ h.next_time.strftime('%-I:%M %p') }}. You'll get a notification.</p>
+      <a class="btn dark" href="/add">Add a job yourself</a>
+    {% elif status == 'needs_human' %}
+      <h2>Nothing needs you</h2>
+      <p>Applications that hit a CAPTCHA or a question nightshift won't guess land here.</p>
+    {% elif status == 'approved' %}
+      <h2>No approved jobs waiting</h2>
+      <p>Jobs you approve are sent during the next nightly run.</p>
+    {% elif status == 'submitted' %}
+      <h2>No applications sent yet</h2>
+      <p>Approved jobs show up here once they're submitted.</p>
+    {% else %}
+      <h2>Empty</h2>
+      <p>No jobs in this list.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

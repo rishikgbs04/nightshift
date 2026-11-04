@@ -1,104 +1,135 @@
 {% extends "base.html" %}
-{% block title %}{{ row.title }} · {{ row.company }}{% endblock %}
+{% from "_icons.html" import back, check, ext %}
+{% from "_card.html" import dial %}
+{% block title %}{{ row.title }}, {{ row.company }}{% endblock %}
 {% block body %}
-<p><a href="/?status={{ row.status }}">&larr; back</a></p>
-<div class="detail">
-  <div class="stack">
-    <section class="card">
-      <h2 style="font-size:20px;margin-bottom:4px">{{ row.title }}</h2>
-      <div class="meta">{{ row.company }}{% if row.location %} · {{ row.location }}{% endif %} · status: <b>{{ row.status }}</b>
-        {% if row.url %} · <a href="{{ row.url }}" target="_blank" rel="noopener">posting</a>{% endif %}</div>
-      {% if score %}
-      <p style="margin:12px 0 0"><b>{{ score.score }}/10</b> — {{ score.reasons | join('; ') }}</p>
-      {% if score.red_flags %}<p class="meta" style="margin:4px 0 0">Watch out: {{ score.red_flags | join('; ') }}</p>{% endif %}
-      {% endif %}
-      {% for n in notes if not n.startswith('guard:') %}<span class="flag">{{ n }}</span>{% endfor %}
-      {% if row.error %}<div class="viol">{{ row.error }}</div>{% endif %}
-      <p class="btns" style="margin:14px 0 0">
-        {% if row.status in ('queued', 'skipped', 'low_score') %}
-        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button class="primary" name="do" value="approve">Approve</button></form>
-        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button name="do" value="skip">Skip</button></form>
-        {% endif %}
-        {% if row.status != 'submitted' %}
-        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button name="do" value="applied">Mark applied</button></form>
-        {% endif %}
-        <form class="inline" method="post" action="/retailor"><input type="hidden" name="id" value="{{ row.id }}"><button>Re-tailor</button></form>
-        {% if files.resume %}<a class="btn" href="/file?id={{ row.id | urlencode }}&name={{ files.resume.name | urlencode }}" download>Download {{ 'CV' if r and r.doc_kind == 'cv' else 'resume' }}</a>{% endif %}
-        {% if files.letter %}<a class="btn" href="/file?id={{ row.id | urlencode }}&name={{ files.letter.name | urlencode }}" download>Cover letter</a>{% endif %}
-      </p>
-    </section>
+<header class="page-head">
+  <div class="wrap wide">
+    <div class="topbar">
+      <a class="icon-btn" href="/?status={{ row.status }}" aria-label="Back to the list" style="margin-left:-10px">{{ back() }}</a>
+      {% if row.url %}<a class="icon-btn" href="{{ row.url }}" target="_blank" rel="noopener" aria-label="Open the posting">{{ ext() }}</a>{% endif %}
+    </div>
+    <div class="row">
+      <div>
+        <h1>{{ row.title }}</h1>
+        <p class="org"><b>{{ row.company }}</b>{% if row.location %}<br>{{ row.location }}{% endif %}</p>
+      </div>
+      {{ dial(row.score) }}
+    </div>
+  </div>
+</header>
 
+<main class="wrap wide sections" id="detail" data-id="{{ row.id }}" data-status="{{ row.status }}">
+  <div class="detail-grid">
+  <div class="col">
+    {% if c.why or c.red_flags or c.flags or row.error %}
+    <section class="panel">
+      <h2>Why it's a match</h2>
+      {% if c.why %}<p>{{ c.why | join('. ') }}{{ '' if (c.why | last).endswith('.') else '.' }}</p>{% endif %}
+      {% if c.flags or c.red_flags %}
+      <div class="chips">
+        {% for f in c.flags %}<span class="chip flag">{{ f.replace('sponsorship: posting says', 'Says') }}</span>{% endfor %}
+        {% for f in c.red_flags %}<span class="chip flag">{{ f }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      {% if row.error %}<p class="err">{{ row.error }}</p>{% endif %}
+    </section>
+    {% endif %}
+
+    {% if files.resume %}
+    <section class="panel">
+      <h2>Your tailored {{ 'CV' if r and r.doc_kind == 'cv' else 'resume' }}</h2>
+      <a href="/file?id={{ row.id | urlencode }}&name={{ files.resume.name | urlencode }}" target="_blank" rel="noopener">
+        {% if c.has_preview %}<img class="preview" src="/file?id={{ row.id | urlencode }}&name=preview.png" alt="Preview of your tailored resume for {{ row.company }}">
+        {% else %}<span class="btn">Open the PDF</span>{% endif %}
+      </a>
+      <p class="note">Tap to open the PDF{% if files.letter %}, or <a href="/file?id={{ row.id | urlencode }}&name={{ files.letter.name | urlencode }}" target="_blank" rel="noopener">the cover letter</a>{% endif %}.</p>
+    </section>
+    {% endif %}
+  </div>
+
+  <div class="col">
     {% if r %}
-    <section class="card">
-      <h2>Keyword match</h2>
-      <div class="metric">
-        <div><b>{{ (r.coverage_after.score * 100) | round | int }}%</b><span>of the job's keywords you have are on the page</span></div>
-        <div><b>{{ (r.coverage_before.prominence * 100) | round | int }}% → {{ (r.coverage_after.prominence * 100) | round | int }}%</b><span>appear near the top</span></div>
+    <section class="panel">
+      <h2>Skills they list</h2>
+      <div class="kv">
+        <div><b>{{ r.coverage_after.matched | length }} of {{ (r.coverage_after.matched | length) + (r.coverage_after.missing_but_in_profile | length) + (r.coverage_after.gaps | length) }}</b><span>on your resume</span></div>
+        {% if r.coverage_after.prominence > r.coverage_before.prominence %}<div><b>{{ (r.coverage_before.prominence * 100) | round | int }}% → {{ (r.coverage_after.prominence * 100) | round | int }}%</b><span>moved near the top</span></div>{% endif %}
       </div>
       <div class="chips">
-        {% for k in r.coverage_after.matched %}<span class="ok">{{ k }}</span>{% endfor %}
-        {% for k in r.coverage_after.missing_but_in_profile %}<span class="have" title="In your profile but cut for space">{{ k }}</span>{% endfor %}
+        {% for k in r.coverage_after.matched %}<span class="chip ok">{{ k }}</span>{% endfor %}
+        {% for k in r.coverage_after.missing_but_in_profile %}<span class="chip">{{ k }}</span>{% endfor %}
       </div>
       {% if r.coverage_after.gaps %}
-      <p class="hint" style="margin:12px 0 4px">The job asks for these and your profile doesn't have them, so they were <b>not</b> added. Worth learning, or worth mentioning honestly if you have some exposure:</p>
-      <div class="chips">{% for k in r.coverage_after.gaps %}<span class="gap">{{ k }}</span>{% endfor %}</div>
+      <p class="sub-h">Not in your profile, so not added</p>
+      <div class="chips" style="margin-top:4px">{% for k in r.coverage_after.gaps %}<span class="chip">{{ k }}</span>{% endfor %}</div>
       {% endif %}
     </section>
 
-    <section class="card">
-      <h2>What changed</h2>
-      <p class="hint" style="margin-top:0">{{ r.doc_kind | upper }} · {{ r.pages }} page{{ 's' if r.pages != 1 }} · sections: {{ r.resume.section_order | join(' → ') }}</p>
-      {% for kind in r.resume.section_order %}
-        {% for te in r.resume[kind] %}
-          <div style="margin-top:10px"><b>{{ entries[te.id].org if kind == 'experience' else entries[te.id].title }}</b></div>
-          {% for b in te.bullets %}
-          <div class="change">{{ b.text }}{% if b.original and b.original != b.text %}<div class="was">{{ b.original }}</div>{% endif %}</div>
+    <section class="panel">
+      <details>
+        <summary>What was tailored</summary>
+        {% set ns = namespace(changed=0) %}
+        {% for kind in r.resume.section_order %}
+          {% for te in r.resume[kind] %}
+            <p class="entry-name">{{ entries[te.id].org if kind == 'experience' else entries[te.id].title }}</p>
+            {% for b in te.bullets %}
+            <div class="change">{{ b.text }}{% if b.original and b.original != b.text %}{% set ns.changed = ns.changed + 1 %}<div class="was">{{ b.original }}</div>{% endif %}</div>
+            {% endfor %}
           {% endfor %}
         {% endfor %}
-      {% endfor %}
-      {% if r.violations %}
-      <details style="margin-top:12px"><summary>Guard caught {{ r.violations | length }} issue{{ 's' if r.violations | length != 1 }}</summary>
-        {% for v in r.violations %}<div class="viol"><b>{{ v.where }}</b> · {{ v.rule }}: {{ v.detail }} → {{ v.action }}</div>{% endfor %}
+        <p class="note">{% if r.violations | selectattr('rule', 'ne', 'llm') | list %}{{ r.violations | selectattr('rule', 'ne', 'llm') | list | length }} line{{ 's' if (r.violations | selectattr('rule', 'ne', 'llm') | list | length) != 1 }} reverted to your own wording because the rewrite claimed something your profile doesn't back.{% else %}Every line traces back to your profile.{% endif %}</p>
       </details>
-      {% else %}
-      <p class="hint">Guard: every line traces back to your master profile.</p>
-      {% endif %}
-    </section>
-
-    <section class="card">
-      <h2>Cover letter</h2>
-      <form method="post" action="/letter">
-        <input type="hidden" name="id" value="{{ row.id }}">
-        <textarea name="text" style="min-height:260px">{{ r.cover_letter }}</textarea>
-        <p><button>Save &amp; re-render</button> <span class="hint">Sentences about you that claim things not in your profile get removed.</span></p>
-      </form>
     </section>
     {% endif %}
 
     {% if drafted or form_shot %}
-    <section class="card">
-      <h2>Application form</h2>
-      {% for d in drafted %}
-      <div class="change"><b>{{ d.question }}</b><div style="margin-top:4px;white-space:pre-wrap">{{ d.answer }}</div></div>
-      {% endfor %}
-      {% if drafted %}<p class="hint">Drafted from your profile and the posting; claims about you that aren't in your profile were removed.</p>{% endif %}
-      {% if form_shot %}<p><a href="/file?id={{ row.id | urlencode }}&name=form.png" target="_blank" rel="noopener">See the filled form</a></p>{% endif %}
+    <section class="panel">
+      <details {{ 'open' if row.status == 'needs_human' }}>
+        <summary>Application answers</summary>
+        {% for d in drafted %}<div class="change"><b>{{ d.question }}</b><div style="margin-top:4px;white-space:pre-wrap">{{ d.answer }}</div></div>{% endfor %}
+        {% if form_shot %}<p class="note"><a href="/file?id={{ row.id | urlencode }}&name=form.png" target="_blank" rel="noopener">See the filled form</a></p>{% endif %}
+      </details>
     </section>
     {% endif %}
 
-    <section class="card">
+    {% if r %}
+    <section class="panel" id="letter">
+      <details>
+        <summary>Cover letter</summary>
+        <form method="post" action="/letter">
+          <input type="hidden" name="id" value="{{ row.id }}">
+          <textarea name="text" aria-label="Cover letter">{{ r.cover_letter }}</textarea>
+          <p class="note">Sentences about you that claim something your profile doesn't back are removed when you save.</p>
+          <p style="margin-top:10px"><button class="btn small">Save letter</button></p>
+        </form>
+      </details>
+    </section>
+    {% endif %}
+
+    <section class="panel">
       <details><summary>Job description</summary><div class="jd">{{ row.description }}</div></details>
     </section>
-  </div>
 
-  <div>
-    {% if files.resume %}
-    <a href="/file?id={{ row.id | urlencode }}&name={{ files.resume.name | urlencode }}" target="_blank" rel="noopener" title="Open the PDF">
-      <img class="preview" src="/file?id={{ row.id | urlencode }}&name=preview.png" alt="Tailored resume preview">
-    </a>
-    <p class="hint">Click to open the PDF.</p>
+    <form method="post" action="/retailor"><input type="hidden" name="id" value="{{ row.id }}"><button class="btn small" style="width:100%">Tailor again</button></form>
+  </div>
+  </div>
+</main>
+
+<div class="dock">
+  <div class="wrap wide">
+    {% if row.status in ('queued', 'skipped', 'low_score') %}
+    <div class="actions">
+      <button class="btn" type="button" data-act="skip" data-id="{{ row.id }}">Skip</button>
+      <button class="btn approve" type="button" data-act="approve" data-id="{{ row.id }}">{{ check() }} Approve</button>
+    </div>
+    {% elif row.status in ('approved', 'needs_human') %}
+    <div class="actions {{ 'one' if not c.apply_url }}">
+      {% if c.apply_url %}<a class="btn" href="{{ c.apply_url }}" target="_blank" rel="noopener">Open form {{ ext() }}</a>{% endif %}
+      <button class="btn approve" type="button" data-act="applied" data-id="{{ row.id }}">{{ check() }} I applied</button>
+    </div>
     {% else %}
-    <div class="card empty">Not tailored yet. Click Re-tailor.</div>
+    <div class="actions one"><a class="btn" href="/?status={{ row.status }}">Back to list</a></div>
     {% endif %}
   </div>
 </div>

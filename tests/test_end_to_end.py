@@ -133,7 +133,7 @@ def test_nightly_pipeline_and_dashboard(cfg, profile, tmp_path):
     assert page.status_code == 200 and "Software Engineer, New Grad" in page.text
     jid = "greenhouse:lumenlabs:4012345"
     detail = client.get("/job", params={"id": jid})
-    assert detail.status_code == 200 and "Keyword match" in detail.text and 'class="was"' in detail.text
+    assert detail.status_code == 200 and "Skills they list" in detail.text and 'class="was"' in detail.text
     row = db.get(jid)
     pdf_name = output_files(__import__("pathlib").Path(row["out_dir"]))["resume"].name
     f = client.get("/file", params={"id": jid, "name": pdf_name})

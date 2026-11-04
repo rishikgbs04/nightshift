@@ -121,9 +121,29 @@ def run(config: Path = ConfigOpt, offline: bool = typer.Option(False, help="No L
     cfg = _cfg(config)
     if offline:
         cfg.llm.provider = "offline"
+    from . import notify
+    from .db import DB as _DB
+
     report = do_run(cfg, make_llm(cfg.llm), progress=lambda s: typer.echo(f"  {s}"))
     typer.echo("\n" + report.markdown())
-    _notify(f"{report.queued} applications ready to review", "nightshift")
+    counts = _DB(cfg.db_path).counts()
+    title, msg = notify.morning_message(counts.get("queued", 0), report.auto_approved, report.submitted,
+                                        counts.get("needs_human", 0))
+    notify.send(cfg.notify, title, msg)
+    _notify(msg, title)
+
+
+@app.command()
+def server(
+    home: Path = typer.Option(Path("."), envvar="NIGHTSHIFT_HOME", help="Folder holding config.yaml and data/"),
+    host: str = typer.Option("0.0.0.0"),
+    port: int = typer.Option(8080, envvar="PORT"),
+):
+    """Always-on mode for a cloud server: the app plus a built-in nightly schedule."""
+    from .server import serve as run_server
+
+    typer.echo(f"nightshift server on {host}:{port}, data in {home.resolve()}")
+    run_server(home, host=host, port=port)
 
 
 @app.command()

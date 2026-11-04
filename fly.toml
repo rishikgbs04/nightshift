@@ -1,0 +1,31 @@
+# Fly.io deployment. Change `app` to a unique name, then follow DEPLOY.md.
+app = "nightshift-change-me"
+primary_region = "ewr"
+
+[env]
+  NIGHTSHIFT_HOME = "/data"
+  PORT = "8080"
+
+[mounts]
+  source = "nightshift_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # the nightly schedule lives inside the app, so keep one machine running
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

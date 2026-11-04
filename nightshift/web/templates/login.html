@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sign in to nightshift{% endblock %}
+{% block body %}
+<main class="login">
+  <form method="post" action="/login">
+    <span class="moon" aria-hidden="true" style="display:block"></span>
+    <h1>nightshift</h1>
+    <p>Sign in to review the jobs tailored for you overnight.</p>
+    <label for="pw" style="color:#B9BDD8">Password</label>
+    <input type="password" id="pw" name="password" autocomplete="current-password" required autofocus>
+    {% if error %}<p class="err">That password didn't match. Try again.</p>{% endif %}
+    <button class="btn">Sign in</button>
+  </form>
+</main>
+{% endblock %}
