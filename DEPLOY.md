@@ -26,6 +26,46 @@ default $9).
 myaccount.google.com/apppasswords says the setting isn't available, use your
 personal Gmail for `email.address` instead. Everything else stays the same.
 
+### Using Google AI Pro credits instead (Gemini, $0 out of pocket)
+
+Google AI Pro includes $10/month of Google Cloud credits that pay for the
+Gemini API (claim them at developers.google.com/program/my-benefits). To use
+them:
+
+1. In **aistudio.google.com → Get API key → Create API key**, pick the Google
+   Cloud project linked to the billing account the credits went to (for a new
+   account that's "My First Project"). Keep the key private.
+2. Use `GEMINI_API_KEY=...` in your secrets instead of `ANTHROPIC_API_KEY`.
+3. In Settings → config.yaml, replace the `llm:` section with:
+   ```yaml
+   llm:
+     provider: openai
+     base_url: https://generativelanguage.googleapis.com/v1beta/openai
+     api_key_env: GEMINI_API_KEY
+     model: gemini-3.5-flash-lite          # tailoring and cover letters
+     task_models:                          # cheaper model for the high-volume work
+       score: gemini-3.1-flash-lite
+       classify: gemini-3.1-flash-lite
+       answers: gemini-3.1-flash-lite
+       outreach: gemini-3.1-flash-lite
+     prices:                               # USD per million tokens, paid tier
+       gemini-3.5-flash-lite: [0.30, 2.50]
+       gemini-3.1-flash-lite: [0.25, 1.50]
+     reasoning_effort: low                 # thinking is billed as output
+     max_tokens: 8000
+     monthly_budget_usd: 12                # stay under your credits
+   pipeline:
+     max_llm_scoring_per_run: 40
+     max_tailor_per_run: 15
+   ```
+4. In the Google Cloud console, create a **budget alert** (Billing → Budgets &
+   alerts) of $1 with credits included, so you'd hear about any charge the
+   credits don't cover.
+
+Roughly: $12/month covers about 15 tailored applications a day plus scoring,
+replies and outreach. Prices change; check ai.google.dev/gemini-api/docs/pricing
+and update `prices` if they do.
+
 ## 2. Create the free server
 
 1. Sign up at **cloud.oracle.com** (Free Tier). It asks for a card to verify

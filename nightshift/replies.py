@@ -12,7 +12,7 @@ from typing import Callable, Optional
 from . import notify
 from .config import Config
 from .db import DB
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, for_task
 from .mail import Mail, Mailbox, default_since
 
 KINDS = ("interview", "assessment", "offer", "rejection", "received", "referral", "other")
@@ -58,7 +58,7 @@ def classify(llm: Optional[LLM], m: Mail) -> tuple[str, str]:
     if llm is None:
         return classify_offline(m)
     try:
-        data = llm.json(CLASSIFY_SYSTEM, f"FROM: {m.from_name} <{m.from_addr}>\nSUBJECT: {m.subject}\n\n{m.text[:3500]}")
+        data = for_task(llm, "classify").json(CLASSIFY_SYSTEM, f"FROM: {m.from_name} <{m.from_addr}>\nSUBJECT: {m.subject}\n\n{m.text[:3500]}")
         kind = str(data.get("kind", "other")).lower()
         return (kind if kind in KINDS else "other"), str(data.get("summary", ""))[:300]
     except LLMError:

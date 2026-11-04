@@ -56,8 +56,9 @@ class Spend:
         if self.budget and self.this_month()["usd"] >= self.budget:
             raise BudgetExceeded(f"Monthly AI budget of ${self.budget:.2f} is used up; resumes on the 1st")
 
-    def add(self, input_tokens: int, output_tokens: int) -> float:
-        cost = input_tokens / 1e6 * self.price_in + output_tokens / 1e6 * self.price_out
+    def add(self, input_tokens: int, output_tokens: int, price: Optional[tuple[float, float]] = None) -> float:
+        p_in, p_out = price or (self.price_in, self.price_out)
+        cost = input_tokens / 1e6 * p_in + output_tokens / 1e6 * p_out
         if not self.path:
             return cost
         with self._lock:
@@ -114,8 +115,10 @@ def extract_json(text: str) -> dict[str, Any]:
 
 
 class _HTTPLLM:
-    def __init__(self, cfg: LLMConfig, client: httpx.Client | None = None, spend: Optional[Spend] = None):
+    def __init__(self, cfg: LLMConfig, client: httpx.Client | None = None, spend: Optional[Spend] = None,
+                 model: Optional[str] = None):
         self.cfg = cfg
+        self.model = model or cfg.model
         self.spend = spend or Spend(None, 0, cfg.price_input_per_mtok, cfg.price_output_per_mtok)
         key = cfg.api_key()
         if not key:
@@ -163,7 +166,7 @@ class AnthropicLLM(_HTTPLLM):
             f"{base}/v1/messages",
             {"x-api-key": self.key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
             {
-                "model": self.cfg.model,
+                "model": self.model,
                 "max_tokens": self.cfg.max_tokens,
                 "temperature": self.cfg.temperature,
                 "system": system,
@@ -172,7 +175,8 @@ class AnthropicLLM(_HTTPLLM):
         )
         u = data.get("usage") or {}
         self.spend.add(int(u.get("input_tokens", 0)) + int(u.get("cache_read_input_tokens", 0) or 0)
-                       + int(u.get("cache_creation_input_tokens", 0) or 0), int(u.get("output_tokens", 0)))
+                       + int(u.get("cache_creation_input_tokens", 0) or 0), int(u.get("output_tokens", 0)),
+                       self.cfg.price_for(self.model))
         return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
 
 
@@ -182,22 +186,64 @@ class OpenAICompatLLM(_HTTPLLM):
         data = self._post(
             f"{base}/chat/completions",
             {"Authorization": f"Bearer {self.key}", "content-type": "application/json"},
-            {
-                "model": self.cfg.model,
-                "max_tokens": self.cfg.max_tokens,
-                "temperature": self.cfg.temperature,
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            },
+            self._body(system, user),
         )
         u = data.get("usage") or {}
-        self.spend.add(int(u.get("prompt_tokens", 0)), int(u.get("completion_tokens", 0)))
-        return data["choices"][0]["message"]["content"]
+        prompt = int(u.get("prompt_tokens", 0) or 0)
+        # Thinking tokens are billed as output; some APIs leave them out of
+        # completion_tokens, so count everything that isn't the prompt.
+        out = max(int(u.get("completion_tokens", 0) or 0), int(u.get("total_tokens", 0) or 0) - prompt)
+        self.spend.add(prompt, out, self.cfg.price_for(self.model))
+        content = data["choices"][0]["message"].get("content")
+        if not content:
+            raise LLMError("model returned no text (out of tokens while thinking?)")
+        return content
+
+    def _body(self, system: str, user: str) -> dict:
+        body = {
+            "model": self.model,
+            "max_tokens": self.cfg.max_tokens,
+            "temperature": self.cfg.temperature,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }
+        if self.cfg.reasoning_effort:
+            body["reasoning_effort"] = self.cfg.reasoning_effort
+        return body
 
 
 def spend_for(cfg) -> Spend:
     """The spend ledger for a full Config (lives in data/spend.json)."""
     c = cfg.llm
     return Spend(cfg.home / "data" / "spend.json", c.monthly_budget_usd, c.price_input_per_mtok, c.price_output_per_mtok)
+
+
+class Router:
+    """One client per task model, sharing one spend ledger. Use for_task()."""
+
+    def __init__(self, cfg: LLMConfig, spend: Spend, client: httpx.Client | None = None):
+        self.cfg, self.spend, self.client = cfg, spend, client
+        self._clients: dict[str, _HTTPLLM] = {}
+        self.default = self._client(cfg.model)
+
+    def _client(self, model: str) -> _HTTPLLM:
+        if model not in self._clients:
+            cls = AnthropicLLM if self.cfg.provider == "anthropic" else OpenAICompatLLM
+            self._clients[model] = cls(self.cfg, client=self.client, spend=self.spend, model=model)
+        return self._clients[model]
+
+    def for_task(self, task: str) -> _HTTPLLM:
+        return self._client(self.cfg.task_models.get(task) or self.cfg.model)
+
+    def json(self, system: str, user: str) -> dict[str, Any]:
+        return self.default.json(system, user)
+
+    def text(self, system: str, user: str) -> str:
+        return self.default.text(system, user)
+
+
+def for_task(llm, task: str):
+    """The model to use for a task (works with plain LLMs and test fakes too)."""
+    return llm.for_task(task) if llm is not None and hasattr(llm, "for_task") else llm
 
 
 def make_llm(cfg, spend: Optional[Spend] = None) -> LLM | None:
@@ -210,6 +256,7 @@ def make_llm(cfg, spend: Optional[Spend] = None) -> LLM | None:
         cfg = cfg.llm
     if cfg.provider == "offline":
         return None
-    if cfg.provider == "anthropic":
-        return AnthropicLLM(cfg, spend=spend)
-    return OpenAICompatLLM(cfg, spend=spend)
+    if not cfg.api_key():
+        raise LLMError(f"No API key: set the {cfg.api_key_env} environment variable, "
+                       "or use llm.provider: offline in config.yaml")
+    return Router(cfg, spend or Spend(None, 0, cfg.price_input_per_mtok, cfg.price_output_per_mtok))

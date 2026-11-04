@@ -25,6 +25,18 @@ class LLMConfig(BaseModel):
     # Price per million tokens, used to count spend. Defaults are Claude Haiku 5.5.
     price_input_per_mtok: float = 0.10
     price_output_per_mtok: float = 0.50
+    # Optional: a different model per task, to spend more only where it shows.
+    # Tasks: score, tailor, letter, answers, outreach, classify.
+    task_models: dict[str, str] = Field(default_factory=dict)
+    # Optional: prices for those models, {model: [input, output]} per million tokens.
+    prices: dict[str, list[float]] = Field(default_factory=dict)
+    # Passed through to OpenAI-compatible APIs that support it (e.g. Gemini:
+    # "none" | "low" | "medium" | "high"). Lower = fewer billed thinking tokens.
+    reasoning_effort: Optional[str] = None
+
+    def price_for(self, model: str) -> tuple[float, float]:
+        p = self.prices.get(model)
+        return (float(p[0]), float(p[1])) if p and len(p) == 2 else (self.price_input_per_mtok, self.price_output_per_mtok)
 
     def api_key(self) -> Optional[str]:
         return os.environ.get(self.api_key_env)

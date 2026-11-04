@@ -18,7 +18,7 @@ import httpx
 from . import guard
 from .config import Config
 from .db import DB, row_to_job
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, for_task
 from .mail import MailError, Sender, compose
 from .models import Job, Profile
 from .tailor import _profile_for_prompt
@@ -146,7 +146,7 @@ def draft(llm: Optional[LLM], profile: Profile, job: Job, contact) -> tuple[str,
     user = (f"{who}\n\nROLE: {job.title} at {job.company}\n\nJOB DESCRIPTION:\n{job.description[:5000]}\n\n"
             f"CANDIDATE PROFILE:\n{_profile_for_prompt(profile)}")
     try:
-        data = llm.json(DRAFT_SYSTEM, user)
+        data = for_task(llm, "outreach").json(DRAFT_SYSTEM, user)
         subject, body = str(data.get("subject", "")).strip()[:90], str(data.get("body", "")).strip()
     except LLMError:
         s, b = draft_offline(profile, job, contact)
@@ -236,7 +236,7 @@ def run(db: DB, cfg: Config, profile: Profile, sender: Optional[Sender], llm: Op
                  f"pointers on the role.\n\nThanks,\n{_first_name(profile.basics.name)}")
         if llm is not None:
             try:
-                data = llm.json(FOLLOWUP_SYSTEM, f"ORIGINAL EMAIL:\n{c['body']}")
+                data = for_task(llm, "outreach").json(FOLLOWUP_SYSTEM, f"ORIGINAL EMAIL:\n{c['body']}")
                 cand, _ = guard.enforce_letter(str(data.get("body", "")), profile)
                 if len(cand.split()) >= 12:
                     body = cand

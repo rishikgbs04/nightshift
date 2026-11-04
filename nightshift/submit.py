@@ -25,7 +25,7 @@ import yaml
 from . import guard
 from .config import Config
 from .db import DB, row_to_job
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, for_task
 from .models import Job, Profile
 from .tailor import _profile_for_prompt, output_files
 
@@ -170,7 +170,7 @@ def make_drafter(llm: Optional[LLM], profile: Profile, job: Job,
         user = (f"QUESTION: {label}\n\nJOB: {job.title} at {job.company}\n\n"
                 f"JOB DESCRIPTION:\n{job.description[:6000]}\n\nCANDIDATE PROFILE:\n{_profile_for_prompt(profile)}")
         try:
-            text = llm.text(ANSWER_SYSTEM, user).strip()
+            text = for_task(llm, "answers").text(ANSWER_SYSTEM, user).strip()
         except LLMError:
             return None
         if not text or text.upper().startswith("SKIP"):

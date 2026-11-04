@@ -279,3 +279,39 @@ def test_nightly_run_checks_replies_then_sends_outreach(env):
     r = run(cfg, None, db=db, jobs=[], mailbox=box, sender=sender)
     assert r.replies_matched == 1 and r.good_news and r.outreach_sent == 1
     assert "Needs you" in r.markdown()
+
+
+def test_router_uses_task_models_and_their_prices(tmp_path, monkeypatch):
+    import json as _json
+
+    from nightshift.config import LLMConfig
+    from nightshift.llm import Router
+    from nightshift.tailor import score_job
+
+    monkeypatch.setenv("GEMINI_TEST_KEY", "k")
+    seen = []
+
+    def handler(req):
+        body = _json.loads(req.content)
+        seen.append((body["model"], body.get("reasoning_effort")))
+        assert req.url.path.endswith("/v1beta/openai/chat/completions")
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"score": 8, "reasons": ["fit"], "red_flags": []}'}}],
+            # 1,000 thinking tokens are in total_tokens but not completion_tokens
+            "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 100_000, "total_tokens": 2_100_000}})
+
+    cfg = LLMConfig(provider="openai", base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+                    api_key_env="GEMINI_TEST_KEY", model="gemini-3.5-flash-lite", reasoning_effort="low",
+                    task_models={"score": "gemini-3.1-flash-lite"},
+                    prices={"gemini-3.1-flash-lite": [0.25, 1.50], "gemini-3.5-flash-lite": [0.30, 2.50]})
+    spend = Spend(tmp_path / "spend.json", 50, cfg.price_input_per_mtok, cfg.price_output_per_mtok)
+    router = Router(cfg, spend, client=httpx.Client(transport=httpx.MockTransport(handler)))
+    profile = Profile.load(EXAMPLE_PROFILE)
+    job = Job(id="m:1", source="manual", company="Acme", title="SWE", description="Python")
+    assert score_job(router, profile, job)["score"] == 8
+    assert seen[-1] == ("gemini-3.1-flash-lite", "low")
+    # 1M input at $0.25 + 1.1M output (incl. thinking) at $1.50 = $1.90
+    assert abs(spend.this_month()["usd"] - 1.90) < 1e-6
+    router.text("s", "u")
+    assert seen[-1][0] == "gemini-3.5-flash-lite"
+    assert abs(spend.this_month()["usd"] - (1.90 + 0.30 + 1.1 * 2.50)) < 1e-6

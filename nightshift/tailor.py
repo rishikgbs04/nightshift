@@ -15,7 +15,7 @@ from typing import Optional
 
 from . import guard, keywords
 from .config import Config
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, for_task
 from .models import (
     Job,
     Profile,
@@ -159,7 +159,7 @@ def draft_llm(llm: LLM, profile: Profile, job: Job, write_summary: bool) -> Tail
     user = (f"MASTER PROFILE:\n{_profile_for_prompt(profile)}\n\n"
             f"JOB: {job.title} at {job.company} ({job.location})\n\n"
             f"JOB DESCRIPTION:\n{job.description[:12000]}")
-    raw = llm.json(system, user)
+    raw = for_task(llm, "tailor").json(system, user)
     return TailoredResume.model_validate(raw)
 
 
@@ -169,7 +169,7 @@ def score_job(llm: Optional[LLM], profile: Profile, job: Job) -> dict:
         return {"score": max(1, min(10, round(fit * 10))), "reasons": [f"keyword fit {fit:.0%} (offline)"], "red_flags": []}
     user = (f"CANDIDATE PROFILE:\n{_profile_for_prompt(profile)}\n\n"
             f"JOB: {job.title} at {job.company} ({job.location})\n\nDESCRIPTION:\n{job.description[:10000]}")
-    data = llm.json(SCORE_SYSTEM, user)
+    data = for_task(llm, "score").json(SCORE_SYSTEM, user)
     data["score"] = int(max(1, min(10, int(data.get("score", 1)))))
     return data
 
@@ -181,7 +181,7 @@ def write_letter(llm: Optional[LLM], profile: Profile, job: Job, r: TailoredResu
             f"BULLETS ALREADY CHOSEN AS MOST RELEVANT:\n"
             + "\n".join(f"- {b.text}" for te in [*r.experience, *r.projects] for b in te.bullets[:2])
             + f"\n\nJOB: {job.title} at {job.company}\n\nDESCRIPTION:\n{job.description[:10000]}")
-    return llm.text(LETTER_SYSTEM, user).strip()
+    return for_task(llm, "letter").text(LETTER_SYSTEM, user).strip()
 
 
 def _lower_first(s: str) -> str:
