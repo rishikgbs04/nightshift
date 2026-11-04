@@ -1,0 +1,21 @@
+<!doctype html>
+<html><body>
+<h1>Apply: Software Engineer</h1>
+<form id="f" onsubmit="event.preventDefault(); document.body.innerHTML='<h1>Thank you for applying!</h1>';">
+  <label for="first_name">First Name *</label><input id="first_name" name="first_name" required>
+  <label for="last_name">Last Name *</label><input id="last_name" name="last_name" required>
+  <label for="email">Email *</label><input id="email" type="email" name="email" required>
+  <label for="phone">Phone</label><input id="phone" type="tel" name="phone">
+  <label for="resume">Resume/CV *</label><input id="resume" type="file" name="resume" required>
+  <label for="cover">Cover Letter</label><input id="cover" type="file" name="cover_letter">
+  <label for="li">LinkedIn Profile</label><input id="li" name="linkedin">
+  <label for="hear">How did you hear about us?</label>
+  <select id="hear" name="hear"><option value="">Select...</option><option>LinkedIn</option><option>Company website</option></select>
+  <fieldset><legend>Will you now or in the future require visa sponsorship? *</legend>
+    <label><input type="radio" name="sponsor" value="yes" required> Yes</label>
+    <label><input type="radio" name="sponsor" value="no"> No</label>
+  </fieldset>
+  <label for="why">Why do you want to work here? *</label><textarea id="why" name="why" required></textarea>
+  <button type="submit">Submit application</button>
+</form>
+</body></html>

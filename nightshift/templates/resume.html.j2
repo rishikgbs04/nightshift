@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ p.basics.name }} - {{ kind_title }}</title>
+<style>
+  @page { size: {{ paper }}; margin: {{ margin }}; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; }
+  body {
+    margin: 0; color: #111;
+    font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+    font-size: {{ font_pt }}pt; line-height: {{ line }};
+  }
+  header { text-align: center; margin-bottom: {{ gap }}pt; }
+  h1 { font-size: {{ font_pt + 8 }}pt; margin: 0 0 2pt; letter-spacing: .5pt; font-weight: 700; }
+  .contact { font-size: {{ font_pt - 0.5 }}pt; }
+  .contact a { color: inherit; text-decoration: none; }
+  h2 {
+    font-size: {{ font_pt + 1 }}pt; text-transform: uppercase; letter-spacing: .8pt;
+    border-bottom: .8pt solid #111; margin: {{ gap + 2 }}pt 0 {{ gap - 1 }}pt; padding-bottom: 1pt;
+  }
+  .row { display: flex; justify-content: space-between; gap: 8pt; }
+  .row .r { white-space: nowrap; text-align: right; }
+  .entry { margin-bottom: {{ gap }}pt; break-inside: avoid; }
+  .t { font-weight: 700; }
+  .sub { font-style: italic; }
+  ul { margin: 1pt 0 0; padding-left: 13pt; }
+  li { margin: 0 0 {{ gap / 3 }}pt; }
+  .skills p { margin: 0 0 1pt; }
+  .summary { margin: 0; }
+  .muted { font-size: {{ font_pt - 0.5 }}pt; }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{ p.basics.name }}</h1>
+  <div class="contact">
+    {{ [p.basics.location, p.basics.phone, p.basics.email] | select | join(" &bull; ") | safe }}
+    {%- for l in p.basics.links %} &bull; <a href="{{ l.url if '://' in l.url else 'https://' ~ l.url }}">{{ l.label }}</a>{% endfor %}
+  </div>
+</header>
+
+{% if r.summary %}
+<h2>Summary</h2>
+<p class="summary">{{ r.summary }}</p>
+{% endif %}
+
+<h2>Education</h2>
+{% for ed in p.education %}
+<div class="entry">
+  <div class="row"><span><span class="t">{{ ed.school }}</span></span><span class="r">{{ ed.location }}</span></div>
+  <div class="row"><span class="sub">{{ ed.degree }}{% if ed.gpa %} (GPA {{ ed.gpa }}){% endif %}</span><span class="r sub">{{ [ed.start, ed.end] | select | join(" &ndash; ") | safe }}</span></div>
+  {% if loop.first and coursework %}<div class="muted"><b>Relevant coursework:</b> {{ coursework | join(", ") }}</div>{% endif %}
+</div>
+{% endfor %}
+
+{% for section in r.section_order %}
+{% if section == 'experience' %}
+{% if experience %}
+<h2>Experience</h2>
+{% for e, te in experience %}
+<div class="entry">
+  <div class="row"><span><span class="t">{{ e.org }}</span></span><span class="r">{{ e.location }}</span></div>
+  <div class="row"><span class="sub">{{ e.title }}</span><span class="r sub">{{ [e.start, e.end] | select | join(" &ndash; ") | safe }}</span></div>
+  <ul>{% for b in te.bullets %}<li>{{ b.text }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+{% endif %}
+
+{% else %}
+{% if projects %}
+<h2>Projects</h2>
+{% for e, te in projects %}
+<div class="entry">
+  <div class="row">
+    <span><span class="t">{{ e.title }}</span>{% if e.link %} | <a href="{{ e.link if '://' in e.link else 'https://' ~ e.link }}" style="color:inherit">{{ e.link }}</a>{% endif %}</span>
+    <span class="r sub">{{ [e.start, e.end] | select | join(" &ndash; ") | safe }}</span>
+  </div>
+  {% if e.org or e.tech %}<div class="sub">{{ e.org }}{% if e.org and e.tech %} | {% endif %}{% if e.tech %}{{ e.tech | join(", ") }}{% endif %}</div>{% endif %}
+  <ul>{% for b in te.bullets %}<li>{{ b.text }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+{% endif %}
+
+{% endif %}
+{% endfor %}
+
+{% if r.skills %}
+<h2>Skills</h2>
+<div class="skills">
+{% for cat, items in r.skills.items() %}{% if items %}<p><b>{{ cat }}:</b> {{ items | join(", ") }}</p>{% endif %}{% endfor %}
+</div>
+{% endif %}
+
+{% if extras %}
+<h2>Leadership &amp; Achievements</h2>
+<div class="skills">
+{% for x in extras %}<p><b>{{ x.label }}:</b> {{ x.text }}</p>{% endfor %}
+</div>
+{% endif %}
+</body>
+</html>

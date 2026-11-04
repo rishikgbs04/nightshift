@@ -1,0 +1,32 @@
+# Answers to application-form questions, matched against each field's label
+# (case-insensitive regex). First match wins, and these win over the defaults
+# taken from your profile (name, email, phone, LinkedIn, GitHub, school...).
+#
+# __FILL_ME__ means "never guess": any required question that lands on it
+# sends the application to "Needs you" instead of being answered.
+
+- match: "authori[sz]ed to work|legally (eligible|permitted)|right to work"
+  value: __FILL_ME__
+- match: "sponsor"
+  value: __FILL_ME__
+- match: "salary|compensation expectation|expected pay"
+  value: __FILL_ME__
+- match: "how did you (hear|learn|find)|source"
+  value: Company website
+- match: "start date|when can you start|earliest"
+  value: __FILL_ME__
+- match: "relocat"
+  value: __FILL_ME__
+- match: "graduat(ion|e) (date|year)|expected graduation"
+  value: __FILL_ME__
+- match: "website|portfolio"
+  value: __FILL_ME__
+# Voluntary self-identification. Pick your own answers or keep declining.
+- match: "gender|pronoun"
+  value: Decline to self-identify
+- match: "race|ethnic|hispanic|latino"
+  value: Decline to self-identify
+- match: "veteran"
+  value: I don't wish to answer
+- match: "disabilit"
+  value: I don't wish to answer

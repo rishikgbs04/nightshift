@@ -1,0 +1,86 @@
+# Your MASTER profile: everything true about you, in your own words.
+# Tailoring only selects, reorders and rewords lines from this file; it never
+# adds facts. Put MORE here than fits on one page.
+# Every job/project and every bullet needs a unique id.
+
+basics:
+  name: Jordan Rivera
+  location: New York, NY
+  phone: 555-010-0199
+  email: jordan.rivera@example.com
+  links:
+    - { label: linkedin.com/in/jordanrivera, url: https://linkedin.com/in/jordanrivera }
+    - { label: github.com/jordanrivera, url: https://github.com/jordanrivera }
+
+education:
+  - id: ms
+    school: Example State University
+    location: New York, NY
+    degree: M.S. in Computer Science
+    gpa: "3.9"
+    end: Expected May 2027
+    coursework: [Machine Learning, Distributed Systems, Algorithms, Databases, Computer Networks, Big Data]
+
+experience:
+  - id: acme
+    org: Acme Analytics
+    title: Software Engineer Intern
+    location: Boston, MA
+    start: June 2025
+    end: August 2025
+    tech: [Python, FastAPI, PostgreSQL, Docker, Redis]
+    bullets:
+      - id: acme-1
+        text: Built a FastAPI service that serves customer usage reports from PostgreSQL, replacing a nightly batch export
+      - id: acme-2
+        text: Added Redis caching for the five most expensive report queries, cutting p95 latency from 1.8s to 300ms
+      - id: acme-3
+        text: Containerized the service with Docker and wrote 40 pytest tests that run in CI on every pull request
+      - id: acme-4
+        text: Wrote the on-call runbook for the reporting service and handled two production incidents with the team
+
+  - id: library
+    org: Example State University Library
+    title: Student Web Developer
+    location: New York, NY
+    start: September 2023
+    end: May 2025
+    tech: [JavaScript, React, Django]
+    bullets:
+      - id: lib-1
+        text: Rebuilt the room-booking site in React and Django, used by about 3,000 students per semester
+      - id: lib-2
+        text: Fixed accessibility issues across 25 pages to meet WCAG 2.1 AA
+
+projects:
+  - id: ragbot
+    title: Course Q&A Assistant
+    link: github.com/jordanrivera/course-qa
+    org: Personal project
+    start: January 2026
+    end: Present
+    tech: [Python, LLM APIs, Embeddings, FAISS, Streamlit]
+    bullets:
+      - id: rag-1
+        text: Built a retrieval-augmented Q&A assistant over 400 pages of lecture notes using embeddings and FAISS
+      - id: rag-2
+        text: Created a 120-question evaluation set and raised answer accuracy from 61% to 83% by tuning chunking and reranking
+
+  - id: tracker
+    title: Expense Tracker
+    org: Mobile app
+    start: March 2024
+    end: May 2024
+    tech: [React Native, Firebase]
+    bullets:
+      - id: trk-1
+        text: Shipped a React Native expense tracker with Firebase sync and offline mode
+
+skills:
+  Languages: [Python, JavaScript, TypeScript, SQL, Java]
+  Frameworks: [FastAPI, Django, React, React Native, pytest]
+  Data/Infra: [PostgreSQL, Redis, Docker, Firebase, FAISS, AWS]
+
+extras:
+  - label: Leadership
+    text: Treasurer, Computer Science Club

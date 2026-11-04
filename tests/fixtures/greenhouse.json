@@ -1,0 +1,10 @@
+{"jobs": [
+  {"id": 4012345, "title": "Software Engineer, New Grad", "company_name": "Lumen Labs",
+   "absolute_url": "https://boards.greenhouse.io/lumenlabs/jobs/4012345",
+   "location": {"name": "New York, NY"}, "updated_at": "2026-11-01T10:00:00-04:00", "first_published": "2026-10-28T09:00:00-04:00",
+   "content": "&lt;p&gt;Build &lt;strong&gt;Python&lt;/strong&gt; services with FastAPI.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;PostgreSQL &amp;amp; Redis&lt;/li&gt;&lt;li&gt;Docker, Kubernetes&lt;/li&gt;&lt;/ul&gt;"},
+  {"id": 4012346, "title": "Senior Staff Engineer", "company_name": "Lumen Labs",
+   "absolute_url": "https://boards.greenhouse.io/lumenlabs/jobs/4012346",
+   "location": {"name": "New York, NY"}, "updated_at": "2026-11-01T10:00:00-04:00",
+   "content": "&lt;p&gt;Lead the platform.&lt;/p&gt;"}
+]}

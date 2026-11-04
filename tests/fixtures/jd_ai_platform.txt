@@ -1,0 +1,22 @@
+Software Engineer, AI Platform (New Grad)
+Lumen Labs - New York, NY (Hybrid)
+
+About the role
+Lumen Labs builds infrastructure that lets product teams ship features powered by large language models. As a new-grad engineer on the AI Platform team you'll build the backend services that sit between our products and model providers: request routing, caching, rate limiting, evaluation, and observability.
+
+What you'll do
+- Design and build Python services (FastAPI) that serve millions of LLM requests a day
+- Improve latency and cost through caching, batching and smart model routing
+- Build reliable systems: retries, failover, circuit breakers and graceful degradation
+- Instrument everything with metrics and tracing (Prometheus, Grafana)
+- Write well-tested code (pytest) and ship through CI/CD with Docker and Kubernetes
+- Work with embeddings and vector search for retrieval-augmented generation (RAG)
+
+What we're looking for
+- BS/MS in Computer Science or a related field (graduating 2026-2027)
+- Strong Python; experience building REST APIs
+- Familiarity with LLMs, embeddings, or ML systems
+- Experience with SQL databases such as PostgreSQL
+- Bonus: Go, Kubernetes, Kafka, or experience with distributed systems
+
+We sponsor work visas for eligible candidates.

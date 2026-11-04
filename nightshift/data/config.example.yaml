@@ -1,0 +1,50 @@
+# nightshift configuration. Paths are relative to this file.
+profile_path: profile.yaml
+answers_path: answers.yaml
+
+llm:
+  # anthropic | openai (any OpenAI-compatible API, e.g. a local gateway) | offline
+  provider: anthropic
+  model: claude-sonnet-5-5
+  api_key_env: ANTHROPIC_API_KEY     # name of the env var that holds the key
+  # base_url: http://localhost:8000/v1   # for provider: openai pointed at a gateway/local model
+
+search:
+  title_include: [software engineer, software developer, swe, backend, back-end, full stack, full-stack,
+                  machine learning, ml engineer, ai engineer, applied ai, data engineer, platform engineer,
+                  new grad, graduate, intern, internship]
+  title_exclude: [senior, sr, staff, principal, lead, manager, director, head of, vp, distinguished, architect]
+  # Empty list = anywhere. Matching is substring-on-words, so "New York" matches "New York, NY".
+  locations: [New York, NYC, Remote, United States, USA, US, Canada, Toronto, Vancouver, London,
+              United Kingdom, UK, Dublin, Ireland, Sydney, Melbourne, Australia, Auckland, New Zealand]
+  max_age_days: 30
+  # If you'll need visa sponsorship, set this to true. Postings that say they
+  # won't sponsor are then flagged (sponsorship_policy: flag) or skipped (skip).
+  needs_sponsorship: false
+  sponsorship_policy: flag
+
+# Companies to watch, by their job-board slug (the part of the careers URL).
+#   boards.greenhouse.io/<slug>   jobs.lever.co/<slug>   jobs.ashbyhq.com/<slug>
+# Run `nightshift boards` to check them; fix or delete any that 404.
+companies:
+  greenhouse: [anthropic, stripe, databricks, figma, discord, airbnb, robinhood, cloudflare, dropbox,
+               pinterest, reddit, lyft, gitlab, mongodb, datadog, duolingo, asana, twitch]
+  lever: [palantir, spotify, plaid]
+  ashby: [openai, notion, ramp, linear, replit]
+
+tailor:
+  resume_pages: 1
+  cv_pages: 2          # jobs in cv_regions get a 2-page A4 CV
+  write_summary: false
+  cover_letter: true
+
+pipeline:
+  max_llm_scoring_per_run: 60   # best keyword matches get scored by the model
+  max_tailor_per_run: 25        # how many tailored applications to queue per night
+  min_score: 6                  # 1-10; below this, a job goes to "Low score"
+
+submit:
+  enabled: false     # true = on each run, fill forms for jobs you approved
+  live: false        # true = also click submit (false = fill + screenshot only)
+  browser_channel: chrome
+  headless: true

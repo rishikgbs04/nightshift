@@ -1,0 +1,9 @@
+{"jobs": [
+  {"id": "a1b2c3d4-0000-4000-8000-000000000001", "title": "Backend Engineer", "location": "London",
+   "isRemote": false, "isListed": true, "publishedAt": "2026-10-30T12:00:00.000+00:00",
+   "jobUrl": "https://jobs.ashbyhq.com/brightwave/a1b2c3d4-0000-4000-8000-000000000001",
+   "applyUrl": "https://jobs.ashbyhq.com/brightwave/a1b2c3d4-0000-4000-8000-000000000001/application",
+   "descriptionPlain": "Build APIs in Python and Go. Experience with Kafka and distributed systems."},
+  {"id": "a1b2c3d4-0000-4000-8000-000000000002", "title": "Unlisted Role", "location": "London", "isListed": false,
+   "jobUrl": "https://jobs.ashbyhq.com/brightwave/x", "descriptionPlain": "x"}
+]}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ row.title }} · {{ row.company }}{% endblock %}
+{% block body %}
+<p><a href="/?status={{ row.status }}">&larr; back</a></p>
+<div class="detail">
+  <div class="stack">
+    <section class="card">
+      <h2 style="font-size:20px;margin-bottom:4px">{{ row.title }}</h2>
+      <div class="meta">{{ row.company }}{% if row.location %} · {{ row.location }}{% endif %} · status: <b>{{ row.status }}</b>
+        {% if row.url %} · <a href="{{ row.url }}" target="_blank" rel="noopener">posting</a>{% endif %}</div>
+      {% if score %}
+      <p style="margin:12px 0 0"><b>{{ score.score }}/10</b> — {{ score.reasons | join('; ') }}</p>
+      {% if score.red_flags %}<p class="meta" style="margin:4px 0 0">Watch out: {{ score.red_flags | join('; ') }}</p>{% endif %}
+      {% endif %}
+      {% for n in notes if not n.startswith('guard:') %}<span class="flag">{{ n }}</span>{% endfor %}
+      {% if row.error %}<div class="viol">{{ row.error }}</div>{% endif %}
+      <p class="btns" style="margin:14px 0 0">
+        {% if row.status in ('queued', 'skipped', 'low_score') %}
+        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button class="primary" name="do" value="approve">Approve</button></form>
+        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button name="do" value="skip">Skip</button></form>
+        {% endif %}
+        {% if row.status != 'submitted' %}
+        <form class="inline" method="post" action="/action"><input type="hidden" name="id" value="{{ row.id }}"><button name="do" value="applied">Mark applied</button></form>
+        {% endif %}
+        <form class="inline" method="post" action="/retailor"><input type="hidden" name="id" value="{{ row.id }}"><button>Re-tailor</button></form>
+        {% if files.resume %}<a class="btn" href="/file?id={{ row.id | urlencode }}&name={{ files.resume.name | urlencode }}" download>Download {{ 'CV' if r and r.doc_kind == 'cv' else 'resume' }}</a>{% endif %}
+        {% if files.letter %}<a class="btn" href="/file?id={{ row.id | urlencode }}&name={{ files.letter.name | urlencode }}" download>Cover letter</a>{% endif %}
+      </p>
+    </section>
+
+    {% if r %}
+    <section class="card">
+      <h2>Keyword match</h2>
+      <div class="metric">
+        <div><b>{{ (r.coverage_after.score * 100) | round | int }}%</b><span>of the job's keywords you have are on the page</span></div>
+        <div><b>{{ (r.coverage_before.prominence * 100) | round | int }}% → {{ (r.coverage_after.prominence * 100) | round | int }}%</b><span>appear near the top</span></div>
+      </div>
+      <div class="chips">
+        {% for k in r.coverage_after.matched %}<span class="ok">{{ k }}</span>{% endfor %}
+        {% for k in r.coverage_after.missing_but_in_profile %}<span class="have" title="In your profile but cut for space">{{ k }}</span>{% endfor %}
+      </div>
+      {% if r.coverage_after.gaps %}
+      <p class="hint" style="margin:12px 0 4px">The job asks for these and your profile doesn't have them, so they were <b>not</b> added. Worth learning, or worth mentioning honestly if you have some exposure:</p>
+      <div class="chips">{% for k in r.coverage_after.gaps %}<span class="gap">{{ k }}</span>{% endfor %}</div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>What changed</h2>
+      <p class="hint" style="margin-top:0">{{ r.doc_kind | upper }} · {{ r.pages }} page{{ 's' if r.pages != 1 }} · sections: {{ r.resume.section_order | join(' → ') }}</p>
+      {% for kind in r.resume.section_order %}
+        {% for te in r.resume[kind] %}
+          <div style="margin-top:10px"><b>{{ entries[te.id].org if kind == 'experience' else entries[te.id].title }}</b></div>
+          {% for b in te.bullets %}
+          <div class="change">{{ b.text }}{% if b.original and b.original != b.text %}<div class="was">{{ b.original }}</div>{% endif %}</div>
+          {% endfor %}
+        {% endfor %}
+      {% endfor %}
+      {% if r.violations %}
+      <details style="margin-top:12px"><summary>Guard caught {{ r.violations | length }} issue{{ 's' if r.violations | length != 1 }}</summary>
+        {% for v in r.violations %}<div class="viol"><b>{{ v.where }}</b> · {{ v.rule }}: {{ v.detail }} → {{ v.action }}</div>{% endfor %}
+      </details>
+      {% else %}
+      <p class="hint">Guard: every line traces back to your master profile.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Cover letter</h2>
+      <form method="post" action="/letter">
+        <input type="hidden" name="id" value="{{ row.id }}">
+        <textarea name="text" style="min-height:260px">{{ r.cover_letter }}</textarea>
+        <p><button>Save &amp; re-render</button> <span class="hint">Sentences about you that claim things not in your profile get removed.</span></p>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <details><summary>Job description</summary><div class="jd">{{ row.description }}</div></details>
+    </section>
+  </div>
+
+  <div>
+    {% if files.resume %}
+    <a href="/file?id={{ row.id | urlencode }}&name={{ files.resume.name | urlencode }}" target="_blank" rel="noopener" title="Open the PDF">
+      <img class="preview" src="/file?id={{ row.id | urlencode }}&name=preview.png" alt="Tailored resume preview">
+    </a>
+    <p class="hint">Click to open the PDF.</p>
+    {% else %}
+    <div class="card empty">Not tailored yet. Click Re-tailor.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

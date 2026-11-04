@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ p.basics.name }} - Cover Letter</title>
+<style>
+  @page { size: {{ paper }}; margin: 0.9in; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; font-size: 11pt; line-height: 1.45; color: #111; margin: 0; }
+  h1 { font-size: 17pt; margin: 0 0 2pt; }
+  .contact { font-size: 9.5pt; color: #333; margin-bottom: 22pt; }
+  p { margin: 0 0 10pt; }
+</style>
+</head>
+<body>
+  <h1>{{ p.basics.name }}</h1>
+  <div class="contact">{{ [p.basics.location, p.basics.phone, p.basics.email] | select | join(" &bull; ") | safe }}</div>
+  <p>{{ date }}</p>
+  <p>Re: {{ job.title }}</p>
+  <p>Dear {{ job.company }} Hiring Team,</p>
+  {% for para in paragraphs %}<p>{{ para }}</p>{% endfor %}
+  <p>Sincerely,<br>{{ p.basics.name }}</p>
+</body>
+</html>
