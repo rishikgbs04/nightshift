@@ -51,7 +51,7 @@ def test_tailor_with_llm_enforces_guard_and_fits_one_page(cfg, profile, jd, tmp_
     assert "Kubernetes" not in sum(res.resume.skills.values(), [])
     assert "Kafka" not in res.cover_letter and "AI platform" in res.cover_letter
     assert res.resume.section_order == ["projects", "experience"]
-    pdf_text = "".join(p.extract_text() for p in PdfReader(files["resume"]).pages)
+    pdf_text = " ".join(" ".join(p.extract_text() for p in PdfReader(files["resume"]).pages).split())
     assert "Jordan Rivera" in pdf_text and "Redis" in pdf_text  # real, extractable text for ATS
 
 
