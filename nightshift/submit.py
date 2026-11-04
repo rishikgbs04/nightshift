@@ -217,7 +217,10 @@ def submit_approved(db: DB, cfg: Config, profile: Profile,
             kwargs["executable_path"] = cfg.submit.browser_executable
         elif cfg.submit.browser_channel:
             kwargs["channel"] = cfg.submit.browser_channel
-        browser = pw.chromium.launch(**kwargs)
+        try:
+            browser = pw.chromium.launch(**kwargs)
+        except Exception:  # noqa: BLE001 - fall back to Playwright's bundled Chromium
+            browser = pw.chromium.launch(headless=cfg.submit.headless)
         for row in rows:
             job = row_to_job(row)
             out = Path(row["out_dir"]) if row["out_dir"] else None

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A job-search agent that finds roles overnight, tailors your resume/CV to each one without fabricating anything, and queues them for one-click approval."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Rishik Gannavarapu" }]
 dependencies = [
   "pydantic>=2.6",
@@ -37,3 +37,4 @@ nightshift = ["templates/*", "web/templates/*", "web/static/*", "data/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning:fastapi.testclient", "ignore:.*httpx.*:DeprecationWarning"]

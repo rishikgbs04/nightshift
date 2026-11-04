@@ -103,13 +103,20 @@ class PDFRenderer:
         elif self.channel:
             kwargs["channel"] = self.channel
         try:
-            self._browser = self._pw.chromium.launch(**kwargs)
-        except Exception:
-            if not kwargs:
-                raise
-            # fall back to Playwright's bundled Chromium (`playwright install chromium`)
-            self._browser = self._pw.chromium.launch()
-        self._page = self._browser.new_page()
+            try:
+                self._browser = self._pw.chromium.launch(**kwargs)
+            except Exception:
+                if not kwargs:
+                    raise
+                # fall back to Playwright's bundled Chromium (`playwright install chromium`)
+                self._browser = self._pw.chromium.launch()
+            self._page = self._browser.new_page()
+        except Exception as e:
+            self._pw.stop()  # never leave Playwright's event loop running
+            self._pw = None
+            raise RuntimeError(
+                "Couldn't start a browser to render PDFs. Install Google Chrome, or run: "
+                "playwright install chromium") from e
         return self
 
     def __exit__(self, *exc) -> None:

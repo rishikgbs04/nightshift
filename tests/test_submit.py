@@ -11,8 +11,11 @@ def page(cfg):
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as pw:
-        kw = {"executable_path": cfg.submit.browser_executable} if cfg.submit.browser_executable else {}
-        b = pw.chromium.launch(**kw)
+        kw = {"executable_path": cfg.submit.browser_executable} if cfg.submit.browser_executable else {"channel": "chrome"}
+        try:
+            b = pw.chromium.launch(**kw)
+        except Exception:
+            b = pw.chromium.launch()
         p = b.new_page()
         p.goto((FIX / "apply_form.html").as_uri())
         yield p

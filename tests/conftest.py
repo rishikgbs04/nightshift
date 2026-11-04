@@ -39,9 +39,9 @@ def cfg(tmp_path) -> Config:
     shutil.copy(EXAMPLE_PROFILE, tmp_path / "profile.yaml")
     c = Config(home=tmp_path)
     c.llm.provider = "offline"
+    # Linux CI: chrome on PATH. macOS: channel "chrome" finds /Applications/Google Chrome.app.
+    # Either way the renderer falls back to Playwright's bundled Chromium.
     c.submit.browser_executable = shutil.which("google-chrome") or shutil.which("chromium")
-    if c.submit.browser_executable is None:
-        c.submit.browser_channel = None  # Playwright's bundled Chromium
     return c
 
 
